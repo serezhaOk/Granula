@@ -99,6 +99,8 @@
   }
   #topbar .right { display: flex; gap: 10px; }
   #recBtn::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: #ff3b30; display: block; }
+  /* ВРЕМЕННО: запись с микрофона отключена для теста — убрать строку ниже, чтобы вернуть */
+  #recBtn { display: none; }
 
   /* ---------- knobs ---------- */
   #knobs {
@@ -521,7 +523,10 @@ function unmuteMaster() {
   master.gain.setTargetAtTime(MASTER_VOL, ctx.currentTime, 0.1);
 }
 
+const REC_DISABLED = true; // ВРЕМЕННО: поставить false, чтобы вернуть запись
+
 async function startRec() {
+  if (REC_DISABLED) { toast("запись временно отключена"); return; }
   if (isRecording) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     toast("микрофон требует https"); return;
