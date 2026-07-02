@@ -1,5 +1,7 @@
 // GRANULA service worker — офлайн app shell
-const CACHE = "granula-v1";
+// index.html: network-first (обновления доезжают сразу), офлайн — из кэша.
+// Остальное: cache-first.
+const CACHE = "granula-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -26,19 +28,33 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
+  const sameOrigin = new URL(req.url).origin === location.origin;
+
+  // страница — сначала сеть, кэш как офлайн-фолбэк
+  if (req.mode === "navigate") {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+          return res;
+        })
+        .catch(() => caches.match(req).then((r) => r || caches.match("./index.html")))
+    );
+    return;
+  }
+
+  // ассеты — сначала кэш
   e.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
-      return fetch(req)
-        .then((res) => {
-          // подкладываем свежие ответы того же origin в кэш
-          if (res.ok && new URL(req.url).origin === location.origin) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match("./index.html"));
+      return fetch(req).then((res) => {
+        if (res.ok && sameOrigin) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      });
     })
   );
 });

@@ -267,10 +267,19 @@ const HANN = (() => {
 })();
 
 // ================= audio =================
+const MASTER_VOL = 0.85;
+
+// iOS: тип аудиосессии. "playback" звучит даже при беззвучном переключателе,
+// "play-and-record" — во время записи. Без этого на iPhone тишина/тихий динамик.
+function setSession(type) {
+  try { if (navigator.audioSession) navigator.audioSession.type = type; } catch (e) {}
+}
+
 function initAudio() {
+  setSession("playback");
   ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
   master = ctx.createGain();
-  master.gain.value = 0.85;
+  master.gain.value = MASTER_VOL;
   analyser = ctx.createAnalyser();
   analyser.fftSize = 512;
   master.connect(analyser).connect(ctx.destination);
@@ -329,6 +338,26 @@ function trimToMax(buf) {
   for (let ch = 0; ch < buf.numberOfChannels; ch++)
     out.getChannelData(ch).set(buf.getChannelData(ch).subarray(0, maxLen));
   return out;
+}
+
+// только усиливаем тихое (записи с микрофона), громкое не трогаем
+function normalizeBuffer(buf, target = 0.85) {
+  let peak = 0;
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < d.length; i++) {
+      const a = Math.abs(d[i]);
+      if (a > peak) peak = a;
+    }
+  }
+  if (peak > 0.001 && peak < target) {
+    const g = target / peak;
+    for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < d.length; i++) d[i] *= g;
+    }
+  }
+  return buf;
 }
 
 // ================= grain engine =================
@@ -451,7 +480,7 @@ function setCurrent(name, id) {
 async function useBlob(blob, name, id) {
   try {
     const buf = await decode(await blob.arrayBuffer());
-    buffer = trimToMax(buf);
+    buffer = normalizeBuffer(trimToMax(buf));
     setCurrent(name, id);
     if (playing) startCloud();
     return true;
@@ -481,30 +510,78 @@ function useBuiltin() {
 
 // ================= recording =================
 let mediaRec = null, recChunks = [], recTimerId = null, recStart = 0;
+let isRecording = false, micAnalyser = null, micSrc = null;
+
+function muteMaster() {
+  master.gain.cancelScheduledValues(ctx.currentTime);
+  master.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+}
+function unmuteMaster() {
+  master.gain.cancelScheduledValues(ctx.currentTime);
+  master.gain.setTargetAtTime(MASTER_VOL, ctx.currentTime, 0.1);
+}
 
 async function startRec() {
+  if (isRecording) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     toast("микрофон требует https"); return;
   }
+
+  // глушим ВСЁ до запроса микрофона: и облако, и хвост реверба,
+  // иначе динамик орёт в микрофон, пока висит диалог разрешения
+  stopCloud();
+  muteMaster();
+  setSession("play-and-record");
+
   let stream;
-  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch (e) { toast("нет доступа к микрофону"); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+    });
+  } catch (e) {
+    setSession("playback"); unmuteMaster();
+    if (playing) startCloud();
+    toast("нет доступа к микрофону"); return;
+  }
   recChunks = [];
   try { mediaRec = new MediaRecorder(stream); }
-  catch (e) { toast("запись не поддерживается"); stream.getTracks().forEach(t => t.stop()); return; }
+  catch (e) {
+    stream.getTracks().forEach(t => t.stop());
+    setSession("playback"); unmuteMaster();
+    if (playing) startCloud();
+    toast("запись не поддерживается"); return;
+  }
+
+  // пламя реагирует на микрофон во время записи
+  try {
+    micSrc = ctx.createMediaStreamSource(stream);
+    micAnalyser = ctx.createAnalyser();
+    micAnalyser.fftSize = 512;
+    micSrc.connect(micAnalyser); // в destination НЕ подключаем — иначе завязка
+  } catch (e) { micAnalyser = null; }
 
   mediaRec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
   mediaRec.onstop = async () => {
+    isRecording = false;
     stream.getTracks().forEach(t => t.stop());
+    if (micSrc) { try { micSrc.disconnect(); } catch (e) {} micSrc = null; }
+    micAnalyser = null;
     clearInterval(recTimerId);
     setPalette(samplePal);
     $("recOverlay").classList.remove("show");
+
+    // возвращаем громкий динамик: сессия playback + пинок контексту
+    // (iOS иначе оставляет тихий разговорный динамик после записи)
+    setSession("playback");
+    try { await ctx.suspend(); await ctx.resume(); } catch (e) {}
+    unmuteMaster();
+
     const blob = new Blob(recChunks, { type: mediaRec.mimeType || "audio/webm" });
     const d = new Date();
     const name = "Rec " + String(d.getDate()).padStart(2,"0") + "." + String(d.getMonth()+1).padStart(2,"0") +
                  " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
     const ok = await useBlob(blob, name, null);
-    if (!ok) return;
+    if (!ok) { if (playing && buffer) startCloud(); return; }
     try {
       const id = await dbAdd({ name, blob, duration: buffer.duration, ts: Date.now() });
       currentId = id; localStorage.setItem("granula-last", id);
@@ -512,7 +589,7 @@ async function startRec() {
     } catch (e) {}
   };
 
-  stopCloud(); // не гранулируем во время записи, пишем чисто
+  isRecording = true;
   mediaRec.start();
   recStart = Date.now();
   setPalette("rec");
@@ -659,10 +736,11 @@ function animate() {
   vis.x += (morph.x - vis.x) * 0.006;
   vis.y += (morph.y - vis.y) * 0.006;
 
-  // audio level (сглаженный)
+  // audio level (сглаженный); при записи — уровень с микрофона
   let level = 0;
-  if (analyser) {
-    analyser.getByteTimeDomainData(levelArr);
+  const an = (isRecording && micAnalyser) ? micAnalyser : analyser;
+  if (an) {
+    an.getByteTimeDomainData(levelArr);
     let sum = 0;
     for (let i = 0; i < levelArr.length; i++) { const v = (levelArr[i] - 128) / 128; sum += v * v; }
     level = Math.sqrt(sum / levelArr.length);
@@ -745,7 +823,9 @@ $("stopBtn").addEventListener("click", stopRec);
 // ================= boot =================
 $("start").addEventListener("click", async () => {
   initAudio();
-  await ctx.resume();
+  // не ждём resume: если ОС тянет с активацией аудио, UI всё равно строим,
+  // звук поднимет страховочный pointerdown-обработчик
+  ctx.resume().catch(() => {});
   restoreKnobs();
   for (const k of ["G", "P", "D", "S"]) makeKnob(k);
   $("start").classList.remove("show");
@@ -761,6 +841,11 @@ $("start").addEventListener("click", async () => {
 
   animate();
 }, { once: true });
+
+// страховка: если ОС подвесила аудиоконтекст (звонок, сворачивание) — будим тапом
+document.addEventListener("pointerdown", () => {
+  if (ctx && ctx.state === "suspended" && !isRecording) ctx.resume();
+});
 
 // PWA: регистрация service worker (нужен https или localhost)
 if ("serviceWorker" in navigator) {
