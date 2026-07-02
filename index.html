@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#000000" />
+<meta name="apple-mobile-web-app-title" content="GRANULA" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" href="icon-192.png" />
+<title>GRANULA</title>
+<style>
+  :root {
+    --yellow: #ffc700;
+    --txt: #ffffff;
+    --dim: rgba(255,255,255,0.45);
+    --ring: rgba(255,255,255,0.22);
+    --chip: rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  html, body {
+    margin: 0; height: 100%; background: #000; color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none; overflow: hidden;
+  }
+
+  /* ---------- flame visual ---------- */
+  #stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; }
+  .palette { position: absolute; inset: 0; opacity: 0; will-change: opacity; pointer-events: none; }
+  .blob {
+    position: absolute; left: 50%; border-radius: 50%;
+    pointer-events: none; will-change: transform, opacity;
+  }
+  .bTop { width: 90vmin; height: 110vmin; top: -20vmin; margin-left: -45vmin; }
+  .bMid { width: 70vmin; height: 90vmin; top: 30%; margin-left: -35vmin; }
+  .bBot { width: 85vmin; height: 100vmin; bottom: -30vmin; margin-left: -42.5vmin; }
+
+  /* ember: красный → крем → бирюза */
+  .palette[data-pal="ember"] .bTop { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(232,64,32,0.95) 0%, rgba(190,42,28,0.55) 35%, rgba(120,20,16,0.18) 60%, transparent 75%); }
+  .palette[data-pal="ember"] .bMid { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(240,200,178,0.75) 0%, rgba(214,142,118,0.35) 45%, transparent 72%); }
+  .palette[data-pal="ember"] .bBot { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(58,124,114,0.85) 0%, rgba(40,92,86,0.4) 45%, transparent 72%); }
+
+  /* orchid: маджента → лиловый → стальной синий */
+  .palette[data-pal="orchid"] .bTop { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(216,44,180,0.9) 0%, rgba(160,32,140,0.5) 35%, rgba(90,20,80,0.16) 60%, transparent 75%); }
+  .palette[data-pal="orchid"] .bMid { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(186,158,200,0.7) 0%, rgba(140,110,165,0.32) 45%, transparent 72%); }
+  .palette[data-pal="orchid"] .bBot { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(84,124,196,0.85) 0%, rgba(58,88,150,0.4) 45%, transparent 72%); }
+
+  /* nebula: пыльная роза → золото → фиолет снизу */
+  .palette[data-pal="nebula"] .bTop { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(158,96,96,0.6) 0%, rgba(110,64,70,0.32) 40%, transparent 72%); }
+  .palette[data-pal="nebula"] .bMid { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(226,198,124,0.8) 0%, rgba(170,140,90,0.35) 45%, transparent 72%); }
+  .palette[data-pal="nebula"] .bBot { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(96,74,228,0.95) 0%, rgba(70,52,180,0.5) 45%, transparent 75%); }
+
+  /* rec: розово-фиолетовое свечение */
+  .palette[data-pal="rec"] .bTop { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(70,20,90,0.8) 0%, rgba(40,10,60,0.4) 45%, transparent 72%); }
+  .palette[data-pal="rec"] .bMid { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(235,120,200,0.65) 0%, rgba(180,80,160,0.3) 45%, transparent 72%); }
+  .palette[data-pal="rec"] .bBot { background: radial-gradient(ellipse 50% 50% at 50% 50%,
+    rgba(255,70,210,0.9) 0%, rgba(160,60,200,0.45) 45%, transparent 72%); }
+
+  /* corner hints */
+  .corner {
+    position: absolute; font-size: 10px; letter-spacing: 2px; color: rgba(255,255,255,0.22);
+    pointer-events: none; text-transform: uppercase; font-weight: 600;
+  }
+  .corner.tl { top: calc(env(safe-area-inset-top) + 64px); left: 20px; }
+  .corner.tr { top: calc(env(safe-area-inset-top) + 64px); right: 20px; }
+  .corner.bl { bottom: 160px; left: 20px; }
+  .corner.br { bottom: 160px; right: 20px; }
+
+  /* ---------- top bar ---------- */
+  #topbar {
+    position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 16px; right: 16px;
+    display: flex; align-items: center; justify-content: space-between; z-index: 5;
+  }
+  #sampleChip {
+    background: var(--chip); border: none; color: var(--txt);
+    font-size: 12px; font-weight: 600; padding: 10px 16px; border-radius: 100px;
+    max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .roundbtn {
+    width: 44px; height: 44px; border-radius: 50%; border: none;
+    background: var(--chip); color: var(--txt); font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  #topbar .right { display: flex; gap: 10px; }
+  #recBtn::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: #ff3b30; display: block; }
+
+  /* ---------- knobs ---------- */
+  #knobs {
+    position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 40px);
+    display: flex; gap: 40px; align-items: flex-end; justify-content: center; z-index: 5;
+  }
+  .knob { position: relative; width: 38px; height: 38px; transition: width 0.25s, height 0.25s; touch-action: none; }
+  .knob svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .knob .track { fill: none; stroke: var(--ring); stroke-width: 2; }
+  .knob .arc { fill: none; stroke: var(--yellow); stroke-width: 3; stroke-linecap: round; transition: stroke-width 0.25s; }
+  .knob .letter {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; transition: font-size 0.25s; pointer-events: none;
+  }
+  .knob.big { width: 87px; height: 87px; }
+  .knob.big .arc { stroke-width: 6; }
+  .knob.big .letter { font-size: 22px; }
+  .knob .tip {
+    position: absolute; bottom: calc(100% + 12px); left: 0;
+    background: rgba(30,30,30,0.9); color: #fff; font-size: 11px; font-weight: 600;
+    padding: 5px 9px; border-radius: 6px; white-space: nowrap;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  .knob.big .tip { opacity: 1; }
+  #closeKnob {
+    position: fixed; top: calc(env(safe-area-inset-top) + 12px); right: 16px; z-index: 6;
+    width: 56px; height: 56px; border-radius: 50%; border: none;
+    background: var(--chip); color: #fff; font-size: 20px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    display: none; align-items: center; justify-content: center;
+  }
+  body.adjusting #closeKnob { display: flex; }
+  body.adjusting #topbar { opacity: 0; pointer-events: none; }
+
+  /* ---------- overlays ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 20; background: #000;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .overlay.show { display: flex; }
+
+  #start h2 {
+    font-size: 30px; letter-spacing: 10px; margin: 0 0 14px;
+    background: linear-gradient(180deg, #e84020, #f0c8b2 55%, #3a7c72);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  #start p { color: var(--dim); font-size: 13px; margin: 0; }
+
+  #recOverlay { background: transparent; pointer-events: none; }
+  #recOverlay.show { pointer-events: auto; }
+  #recTimer {
+    font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.85);
+    letter-spacing: 1px; font-variant-numeric: tabular-nums;
+  }
+  #stopBtn {
+    position: absolute; bottom: calc(env(safe-area-inset-bottom) + 96px);
+    width: 232px; height: 82px; border: none; border-radius: 20px;
+    background: transparent; color: #fff; font-size: 15px; font-weight: 500;
+  }
+
+  /* library */
+  #library { background: rgba(0,0,0,0.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); justify-content: flex-end; }
+  #libSheet {
+    width: 100%; max-height: 70vh; overflow-y: auto;
+    padding: 20px 20px calc(env(safe-area-inset-bottom) + 24px);
+  }
+  #libSheet h3 { font-size: 12px; letter-spacing: 3px; color: var(--dim); margin: 0 0 14px; text-transform: uppercase; }
+  .librow {
+    display: flex; align-items: center; gap: 12px; padding: 14px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 14px;
+  }
+  .librow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .librow .dur { color: var(--dim); font-size: 12px; }
+  .librow .del { background: none; border: none; color: var(--dim); font-size: 16px; padding: 4px 8px; }
+  .librow.current .nm { color: var(--yellow); }
+  #loadFileRow { color: var(--yellow); font-weight: 600; }
+
+  #toast {
+    position: fixed; bottom: calc(env(safe-area-inset-bottom) + 140px); left: 50%;
+    transform: translateX(-50%); z-index: 30;
+    background: rgba(30,30,30,0.92); color: #fff; font-size: 12px;
+    padding: 10px 16px; border-radius: 100px; opacity: 0; transition: opacity 0.3s;
+    pointer-events: none; white-space: nowrap;
+  }
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="palette" data-pal="ember"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
+  <div class="palette" data-pal="orchid"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
+  <div class="palette" data-pal="nebula"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
+  <div class="palette" data-pal="rec"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
+  <span class="corner tl">Air</span>
+  <span class="corner tr">Swarm</span>
+  <span class="corner bl">Deep</span>
+  <span class="corner br">Chaos</span>
+</div>
+
+<div id="topbar">
+  <button id="sampleChip">—</button>
+  <div class="right">
+    <button class="roundbtn" id="playBtn">❚❚</button>
+    <button class="roundbtn" id="recBtn" aria-label="record"></button>
+  </div>
+</div>
+
+<div id="knobs"></div>
+<button id="closeKnob">✕</button>
+
+<div class="overlay show" id="start">
+  <h2>GRANULA</h2>
+  <p>коснись, чтобы начать</p>
+</div>
+
+<div class="overlay" id="recOverlay">
+  <span id="recTimer">00:00</span>
+  <button id="stopBtn">Stop</button>
+</div>
+
+<div class="overlay" id="library">
+  <div id="libSheet">
+    <h3>Samples</h3>
+    <div id="libList"></div>
+    <label class="librow" id="loadFileRow">Загрузить файл (mp3 / wav)…
+      <input type="file" id="file" accept=".mp3,.wav,audio/mpeg,audio/wav,audio/x-wav,audio/*" />
+    </label>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+"use strict";
+
+// ================= params =================
+const MAX_SECONDS = 30;
+const KNOBS = {
+  G: { label: "Grain size", min: 15, max: 400, value: 90,  fmt: v => Math.round(v) + " ms" },
+  P: { label: "Position",   min: 0,  max: 1,   value: 0.3, fmt: v => Math.round(v * 100) + " %" },
+  D: { label: "Density",    min: 2,  max: 60,  value: 18,  fmt: v => Math.round(v) + " /s" },
+  S: { label: "Spread",     min: 0,  max: 1,   value: 0.45,fmt: v => Math.round(v * 100) + " %" },
+};
+
+// morph point (XY pad), 0..1, center = neutral
+const morph = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5, touching: false };
+
+let ctx, master, analyser, reverbIn, buffer = null;
+let playing = true, schedulerId = null, nextGrainTime = 0;
+let currentName = "—", currentId = null;
+
+const $ = (id) => document.getElementById(id);
+const toastEl = $("toast");
+let toastT = null;
+function toast(msg, ms = 2600) {
+  toastEl.textContent = msg; toastEl.style.opacity = 1;
+  clearTimeout(toastT); toastT = setTimeout(() => toastEl.style.opacity = 0, ms);
+}
+
+const HANN = (() => {
+  const N = 256, a = new Float32Array(N);
+  for (let i = 0; i < N; i++) a[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (N - 1)));
+  return a;
+})();
+
+// ================= audio =================
+function initAudio() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+  master = ctx.createGain();
+  master.gain.value = 0.85;
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 512;
+  master.connect(analyser).connect(ctx.destination);
+
+  // shimmer reverb: bus -> convolver(6s) -> gain -> master
+  reverbIn = ctx.createGain();
+  const conv = ctx.createConvolver();
+  conv.buffer = makeIR(6, 2.8);
+  const wet = ctx.createGain();
+  wet.gain.value = 0.9;
+  reverbIn.connect(conv).connect(wet).connect(master);
+}
+
+function makeIR(seconds, decay) {
+  const sr = ctx.sampleRate, len = Math.floor(seconds * sr);
+  const ir = ctx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+  }
+  return ir;
+}
+
+function genPad() {
+  const sr = ctx.sampleRate, secs = 5, len = secs * sr;
+  const buf = ctx.createBuffer(2, len, sr);
+  const L = buf.getChannelData(0), R = buf.getChannelData(1);
+  const roots = [110, 164.81, 220, 277.18];
+  for (let i = 0; i < len; i++) {
+    const t = i / sr;
+    let s = 0;
+    for (let k = 0; k < roots.length; k++) {
+      const det = 1 + 0.0015 * Math.sin(2 * Math.PI * (0.1 + k * 0.07) * t);
+      s += Math.sin(2 * Math.PI * roots[k] * det * t) / roots.length;
+      s += 0.25 * Math.sin(2 * Math.PI * roots[k] * 2 * t) / roots.length;
+    }
+    const amp = 0.55 * (0.7 + 0.3 * Math.sin(2 * Math.PI * 0.13 * t));
+    L[i] = s * amp; R[i] = s * amp;
+  }
+  return buf;
+}
+
+function decode(arrayBuf) {
+  return new Promise((resolve, reject) => {
+    const r = ctx.decodeAudioData(arrayBuf, resolve, reject);
+    if (r && r.then) r.then(resolve, reject);
+  });
+}
+
+function trimToMax(buf) {
+  const maxLen = Math.floor(MAX_SECONDS * buf.sampleRate);
+  if (buf.length <= maxLen) return buf;
+  const out = ctx.createBuffer(buf.numberOfChannels, maxLen, buf.sampleRate);
+  for (let ch = 0; ch < buf.numberOfChannels; ch++)
+    out.getChannelData(ch).set(buf.getChannelData(ch).subarray(0, maxLen));
+  return out;
+}
+
+// ================= grain engine =================
+// corner strengths from morph point: TL air, TR swarm, BL deep, BR chaos
+function cornerStrengths() {
+  const x = morph.x, y = morph.y;
+  const w = {
+    tl: (1 - x) * (1 - y), tr: x * (1 - y),
+    bl: (1 - x) * y,       br: x * y,
+  };
+  const s = {};
+  for (const k in w) s[k] = Math.max(0, (w[k] - 0.25) / 0.75);
+  return s;
+}
+
+function scheduleGrain(when) {
+  if (!buffer) return;
+  const c = cornerStrengths();
+  const S = KNOBS.S.value;
+
+  let sizeMs = KNOBS.G.value * (1 - 0.55 * c.tl) * (1 + 1.6 * c.bl);
+  let pitch = 12 * c.tl - 12 * c.bl + (Math.random() * 2 - 1) * 7 * c.br;
+  const sprayMs = 20 + 260 * S + 350 * c.br + 120 * c.tr;
+  const panAmt = 0.25 + 0.75 * S;
+  const shimmerSend = 0.18 + 0.45 * S + 0.35 * c.tl;
+
+  const dur = sizeMs / 1000;
+  const jitter = (Math.random() * 2 - 1) * (sprayMs / 1000);
+  let startSec = KNOBS.P.value * buffer.duration + jitter;
+  startSec = Math.max(0, Math.min(buffer.duration - 0.001, startSec));
+  const rate = Math.pow(2, pitch / 12);
+
+  const dens = effDensity();
+  const peak = Math.min(0.9, 1.4 / Math.sqrt(dens));
+
+  spawnVoice(when, startSec, dur, rate, panAmt, peak, shimmerSend);
+  // shimmer voice: +1 octave, mostly into reverb
+  if (Math.random() < 0.4 + 0.5 * c.tl) {
+    spawnVoice(when + 0.01, startSec, dur * 1.4, rate * 2, panAmt, peak * (0.25 + 0.3 * S), 1.0, true);
+  }
+}
+
+function spawnVoice(when, startSec, dur, rate, panAmt, peak, sendAmt, wetOnly) {
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.playbackRate.value = rate;
+  const g = ctx.createGain();
+  g.gain.value = 0;
+  g.gain.setValueCurveAtTime(HANN.map(v => v * peak), when, dur);
+  const pan = ctx.createStereoPanner();
+  pan.pan.value = (Math.random() * 2 - 1) * panAmt;
+  src.connect(g).connect(pan);
+  if (!wetOnly) pan.connect(master);
+  const send = ctx.createGain();
+  send.gain.value = sendAmt;
+  pan.connect(send).connect(reverbIn);
+  const srcDur = dur * rate;
+  src.start(when, startSec, Math.min(srcDur, buffer.duration - startSec));
+  src.stop(when + dur + 0.02);
+  src.onended = () => { src.disconnect(); g.disconnect(); pan.disconnect(); send.disconnect(); };
+}
+
+function effDensity() {
+  const c = cornerStrengths();
+  return KNOBS.D.value * (1 + 2.2 * c.tr + 0.6 * c.br);
+}
+
+const LOOKAHEAD = 0.12, TICK = 25;
+function schedulerTick() {
+  const ahead = ctx.currentTime + LOOKAHEAD;
+  while (nextGrainTime < ahead) {
+    scheduleGrain(nextGrainTime);
+    nextGrainTime += (1 / effDensity()) * (0.85 + Math.random() * 0.3);
+  }
+}
+function startCloud() {
+  if (schedulerId || !buffer) return;
+  nextGrainTime = ctx.currentTime + 0.05;
+  schedulerId = setInterval(schedulerTick, TICK);
+}
+function stopCloud() {
+  clearInterval(schedulerId); schedulerId = null;
+}
+
+// ================= IndexedDB =================
+let db = null;
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("granula-db", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("samples", { keyPath: "id", autoIncrement: true });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function idb(mode, fn) {
+  return new Promise((resolve, reject) => {
+    if (!db) return resolve(null);
+    const tx = db.transaction("samples", mode);
+    const store = tx.objectStore("samples");
+    const req = fn(store);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+const dbAdd = (rec) => idb("readwrite", s => s.add(rec));
+const dbAll = () => idb("readonly", s => s.getAll());
+const dbGet = (id) => idb("readonly", s => s.get(id));
+const dbDel = (id) => idb("readwrite", s => s.delete(id));
+
+// ================= sample loading =================
+function setCurrent(name, id) {
+  currentName = name; currentId = id;
+  $("sampleChip").textContent = name;
+  samplePal = paletteFor(name);
+  setPalette(samplePal);
+  if (id != null) localStorage.setItem("granula-last", id);
+  else localStorage.removeItem("granula-last");
+}
+
+async function useBlob(blob, name, id) {
+  try {
+    const buf = await decode(await blob.arrayBuffer());
+    buffer = trimToMax(buf);
+    setCurrent(name, id);
+    if (playing) startCloud();
+    return true;
+  } catch (e) {
+    toast("не смог открыть: " + (e && (e.message || e.name) || "формат?"));
+    return false;
+  }
+}
+
+async function loadFile(file) {
+  toast("загружаю…", 1200);
+  const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+  const ok = await useBlob(blob, file.name, null);
+  if (!ok) return;
+  try {
+    const id = await dbAdd({ name: file.name, blob, duration: buffer.duration, ts: Date.now() });
+    currentId = id; localStorage.setItem("granula-last", id);
+  } catch (e) { /* storage full — играем без сохранения */ }
+  hideLibrary(); renderLibrary();
+}
+
+function useBuiltin() {
+  buffer = genPad();
+  setCurrent("Pad · встроенный", null);
+  if (playing) startCloud();
+}
+
+// ================= recording =================
+let mediaRec = null, recChunks = [], recTimerId = null, recStart = 0;
+
+async function startRec() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast("микрофон требует https"); return;
+  }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { toast("нет доступа к микрофону"); return; }
+  recChunks = [];
+  try { mediaRec = new MediaRecorder(stream); }
+  catch (e) { toast("запись не поддерживается"); stream.getTracks().forEach(t => t.stop()); return; }
+
+  mediaRec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+  mediaRec.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop());
+    clearInterval(recTimerId);
+    setPalette(samplePal);
+    $("recOverlay").classList.remove("show");
+    const blob = new Blob(recChunks, { type: mediaRec.mimeType || "audio/webm" });
+    const d = new Date();
+    const name = "Rec " + String(d.getDate()).padStart(2,"0") + "." + String(d.getMonth()+1).padStart(2,"0") +
+                 " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+    const ok = await useBlob(blob, name, null);
+    if (!ok) return;
+    try {
+      const id = await dbAdd({ name, blob, duration: buffer.duration, ts: Date.now() });
+      currentId = id; localStorage.setItem("granula-last", id);
+      renderLibrary();
+    } catch (e) {}
+  };
+
+  stopCloud(); // не гранулируем во время записи, пишем чисто
+  mediaRec.start();
+  recStart = Date.now();
+  setPalette("rec");
+  $("recOverlay").classList.add("show");
+  recTimerId = setInterval(() => {
+    const s = (Date.now() - recStart) / 1000;
+    $("recTimer").textContent = "00:" + String(Math.floor(s)).padStart(2, "0");
+    if (s >= MAX_SECONDS) stopRec();
+  }, 100);
+}
+function stopRec() { if (mediaRec && mediaRec.state === "recording") mediaRec.stop(); }
+
+// ================= knobs UI =================
+const knobsEl = $("knobs");
+const knobEls = {};
+let expanded = null;
+
+function knobArcLen(k) {
+  const K = KNOBS[k];
+  return (K.value - K.min) / (K.max - K.min) * 75; // 75% of circle
+}
+function makeKnob(key) {
+  const el = document.createElement("div");
+  el.className = "knob";
+  el.innerHTML =
+    `<svg viewBox="0 0 38 38">
+       <circle class="track" cx="19" cy="19" r="17.5" pathLength="100" stroke-dasharray="75 100" transform="rotate(135 19 19)"/>
+       <circle class="arc"   cx="19" cy="19" r="17.5" pathLength="100" transform="rotate(135 19 19)"/>
+     </svg>
+     <span class="letter">${key}</span>
+     <span class="tip"></span>`;
+  knobsEl.appendChild(el);
+  knobEls[key] = el;
+  updateKnob(key);
+
+  let dragging = false, startY = 0, startV = 0;
+  el.addEventListener("pointerdown", (e) => {
+    e.stopPropagation();
+    el.setPointerCapture(e.pointerId);
+    if (expanded !== key) expandKnob(key);
+    dragging = true; startY = e.clientY; startV = KNOBS[key].value;
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const K = KNOBS[key];
+    const dv = (startY - e.clientY) / 150 * (K.max - K.min);
+    K.value = Math.max(K.min, Math.min(K.max, startV + dv));
+    updateKnob(key);
+    saveKnobs();
+  });
+  const up = () => dragging = false;
+  el.addEventListener("pointerup", up);
+  el.addEventListener("pointercancel", up);
+}
+function updateKnob(key) {
+  const el = knobEls[key], K = KNOBS[key];
+  el.querySelector(".arc").setAttribute("stroke-dasharray", `${knobArcLen(key)} 100`);
+  el.querySelector(".tip").textContent = K.label + " · " + K.fmt(K.value);
+}
+function expandKnob(key) {
+  collapseKnob();
+  expanded = key;
+  knobEls[key].classList.add("big");
+  document.body.classList.add("adjusting");
+}
+function collapseKnob() {
+  if (!expanded) return;
+  knobEls[expanded].classList.remove("big");
+  expanded = null;
+  document.body.classList.remove("adjusting");
+}
+$("closeKnob").addEventListener("click", collapseKnob);
+
+function saveKnobs() {
+  const o = {}; for (const k in KNOBS) o[k] = KNOBS[k].value;
+  localStorage.setItem("granula-knobs", JSON.stringify(o));
+}
+function restoreKnobs() {
+  try {
+    const o = JSON.parse(localStorage.getItem("granula-knobs") || "{}");
+    for (const k in o) if (KNOBS[k]) KNOBS[k].value = o[k];
+  } catch (e) {}
+}
+
+// ================= XY morph (stage) =================
+const stage = $("stage");
+const pointers = new Map();
+function morphFromPointers() {
+  if (!pointers.size) return;
+  let x = 0, y = 0;
+  pointers.forEach(p => { x += p.x; y += p.y; });
+  morph.tx = x / pointers.size; morph.ty = y / pointers.size;
+}
+stage.addEventListener("pointerdown", (e) => {
+  collapseKnob();
+  stage.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX / innerWidth, y: e.clientY / innerHeight });
+  morph.touching = true; morphFromPointers();
+});
+stage.addEventListener("pointermove", (e) => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX / innerWidth, y: e.clientY / innerHeight });
+  morphFromPointers();
+});
+function releasePointer(e) {
+  pointers.delete(e.pointerId);
+  if (!pointers.size) { morph.touching = false; morph.tx = 0.5; morph.ty = 0.5; }
+  else morphFromPointers();
+}
+stage.addEventListener("pointerup", releasePointer);
+stage.addEventListener("pointercancel", releasePointer);
+
+// ================= visuals =================
+// палитры: у каждого сэмпла своя, кроссфейд медленный
+const PALETTES = ["ember", "orchid", "nebula"];
+const palEls = {};
+document.querySelectorAll(".palette").forEach(el => {
+  palEls[el.dataset.pal] = {
+    el, op: 0,
+    top: el.querySelector(".bTop"), mid: el.querySelector(".bMid"), bot: el.querySelector(".bBot"),
+  };
+});
+let activePal = "ember", samplePal = "ember";
+
+function paletteFor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return PALETTES[h % PALETTES.length];
+}
+function setPalette(p) { activePal = p; }
+
+// медленное визуальное состояние: фон эволюционирует за пальцем с большой инерцией
+const vis = { x: 0.5, y: 0.5 };
+const levelArr = new Uint8Array(256);
+let slowLevel = 0, t0 = performance.now();
+
+function animate() {
+  // ease morph (звук реагирует быстрее, чем фон)
+  const k = morph.touching ? 0.16 : 0.03;
+  morph.x += (morph.tx - morph.x) * k;
+  morph.y += (morph.ty - morph.y) * k;
+
+  // фон догоняет очень медленно — эмбиент
+  vis.x += (morph.x - vis.x) * 0.006;
+  vis.y += (morph.y - vis.y) * 0.006;
+
+  // audio level (сглаженный)
+  let level = 0;
+  if (analyser) {
+    analyser.getByteTimeDomainData(levelArr);
+    let sum = 0;
+    for (let i = 0; i < levelArr.length; i++) { const v = (levelArr[i] - 128) / 128; sum += v * v; }
+    level = Math.sqrt(sum / levelArr.length);
+  }
+  slowLevel += (level - slowLevel) * 0.08;
+
+  const t = (performance.now() - t0) / 1000;
+  const breathe = 0.04 * Math.sin(t * 0.35) + 0.03 * Math.sin(t * 0.21 + 1.7); // медленное дыхание
+  const dx = (vis.x - 0.5) * 22;
+  const dy = (vis.y - 0.5) * 10;
+  const pulse = 1 + slowLevel * 1.3 + breathe;
+
+  const tTop = `translate(${dx}vmin, ${dy * 0.6}vmin) scale(${0.92 + slowLevel * 1.0 + 0.3 * (1 - vis.y) + breathe})`;
+  const tMid = `translate(${dx * 1.4}vmin, ${dy}vmin) scaleY(${pulse}) scaleX(${0.9 + slowLevel * 0.8 + breathe})`;
+  const tBot = `translate(${dx * 0.7}vmin, ${-dy * 0.8}vmin) scale(${0.95 + slowLevel * 0.7 + 0.35 * vis.y - breathe})`;
+  const oTop = 0.55 + slowLevel * 0.7 + 0.15 * (1 - vis.y);
+  const oMid = 0.4 + slowLevel * 1.0;
+  const oBot = 0.5 + slowLevel * 0.7 + 0.2 * vis.y;
+
+  for (const name in palEls) {
+    const P = palEls[name];
+    // кроссфейд палитр — медленный, ~3-4 секунды
+    const target = name === activePal ? 1 : 0;
+    P.op += (target - P.op) * 0.012;
+    P.el.style.opacity = P.op.toFixed(3);
+    if (P.op < 0.005) continue;
+    P.top.style.transform = tTop; P.top.style.opacity = oTop;
+    P.mid.style.transform = tMid; P.mid.style.opacity = oMid;
+    P.bot.style.transform = tBot; P.bot.style.opacity = oBot;
+  }
+
+  requestAnimationFrame(animate);
+}
+
+// ================= library UI =================
+async function renderLibrary() {
+  const list = $("libList");
+  list.innerHTML = "";
+  const rows = (await dbAll()) || [];
+  rows.sort((a, b) => b.ts - a.ts);
+
+  const builtin = document.createElement("div");
+  builtin.className = "librow" + (currentId === null && currentName.startsWith("Pad") ? " current" : "");
+  builtin.innerHTML = `<span class="nm">Pad · встроенный</span><span class="dur">5.0s</span>`;
+  builtin.addEventListener("click", () => { useBuiltin(); hideLibrary(); renderLibrary(); });
+  list.appendChild(builtin);
+
+  for (const r of rows) {
+    const el = document.createElement("div");
+    el.className = "librow" + (r.id === currentId ? " current" : "");
+    el.innerHTML = `<span class="nm">${r.name}</span><span class="dur">${r.duration.toFixed(1)}s</span><button class="del">✕</button>`;
+    el.querySelector(".nm").addEventListener("click", async () => {
+      const rec = await dbGet(r.id);
+      if (rec && await useBlob(rec.blob, rec.name, rec.id)) { hideLibrary(); renderLibrary(); }
+    });
+    el.querySelector(".del").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await dbDel(r.id);
+      if (r.id === currentId) setCurrent(currentName, null);
+      renderLibrary();
+    });
+    list.appendChild(el);
+  }
+}
+function showLibrary() { renderLibrary(); $("library").classList.add("show"); }
+function hideLibrary() { $("library").classList.remove("show"); }
+$("sampleChip").addEventListener("click", showLibrary);
+$("library").addEventListener("click", (e) => { if (e.target === $("library")) hideLibrary(); });
+$("file").addEventListener("change", (e) => { if (e.target.files[0]) loadFile(e.target.files[0]); e.target.value = ""; });
+
+// ================= transport =================
+$("playBtn").addEventListener("click", () => {
+  playing = !playing;
+  $("playBtn").textContent = playing ? "❚❚" : "▶";
+  if (playing) startCloud(); else stopCloud();
+});
+$("recBtn").addEventListener("click", startRec);
+$("stopBtn").addEventListener("click", stopRec);
+
+// ================= boot =================
+$("start").addEventListener("click", async () => {
+  initAudio();
+  await ctx.resume();
+  restoreKnobs();
+  for (const k of ["G", "P", "D", "S"]) makeKnob(k);
+  $("start").classList.remove("show");
+
+  try { db = await openDB(); } catch (e) { db = null; }
+  const last = parseInt(localStorage.getItem("granula-last"), 10);
+  let loaded = false;
+  if (db && !isNaN(last)) {
+    const rec = await dbGet(last);
+    if (rec) loaded = await useBlob(rec.blob, rec.name, rec.id);
+  }
+  if (!loaded) useBuiltin();
+
+  animate();
+}, { once: true });
+
+// PWA: регистрация service worker (нужен https или localhost)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+
+})();
+</script>
+</body>
+</html>
