@@ -62,6 +62,14 @@
   .palette[data-pal="nebula"] .bBot { background: radial-gradient(ellipse 50% 50% at 50% 50%,
     rgba(96,74,228,0.95) 0%, rgba(70,52,180,0.5) 45%, transparent 75%); }
 
+  /* горячее пятно под пальцем (kaoss) + канвас частиц */
+  #touchGlow {
+    position: absolute; left: 0; top: 0; width: 44vmin; height: 44vmin;
+    border-radius: 50%; pointer-events: none; opacity: 0;
+    mix-blend-mode: screen; will-change: transform, opacity;
+  }
+  #fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
   /* rec: розово-фиолетовое свечение */
   .palette[data-pal="rec"] .bTop { background: radial-gradient(ellipse 50% 50% at 50% 50%,
     rgba(70,20,90,0.8) 0%, rgba(40,10,60,0.4) 45%, transparent 72%); }
@@ -99,8 +107,6 @@
   }
   #topbar .right { display: flex; gap: 10px; }
   #recBtn::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: #ff3b30; display: block; }
-  /* ВРЕМЕННО: запись с микрофона отключена для теста — убрать строку ниже, чтобы вернуть */
-  #recBtn { display: none; }
 
   /* ---------- knobs ---------- */
   #knobs {
@@ -195,6 +201,8 @@
   <div class="palette" data-pal="orchid"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
   <div class="palette" data-pal="nebula"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
   <div class="palette" data-pal="rec"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
+  <div id="touchGlow"></div>
+  <canvas id="fx"></canvas>
   <span class="corner tl">Air</span>
   <span class="corner tr">Pulse</span>
   <span class="corner bl">Deep</span>
@@ -552,10 +560,7 @@ function unmuteMaster() {
   master.gain.setTargetAtTime(MASTER_VOL, ctx.currentTime, 0.1);
 }
 
-const REC_DISABLED = true; // ВРЕМЕННО: поставить false, чтобы вернуть запись
-
 async function startRec() {
-  if (REC_DISABLED) { toast("запись временно отключена"); return; }
   if (isRecording) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     toast("микрофон требует https"); return;
@@ -662,7 +667,7 @@ function makeKnob(key) {
   let dragging = false, startY = 0, startV = 0;
   el.addEventListener("pointerdown", (e) => {
     e.stopPropagation();
-    el.setPointerCapture(e.pointerId);
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
     if (expanded !== key) expandKnob(key);
     dragging = true; startY = e.clientY; startV = KNOBS[key].value;
   });
@@ -719,13 +724,13 @@ function morphFromPointers() {
 }
 stage.addEventListener("pointerdown", (e) => {
   collapseKnob();
-  stage.setPointerCapture(e.pointerId);
-  pointers.set(e.pointerId, { x: e.clientX / innerWidth, y: e.clientY / innerHeight });
+  try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+  pointers.set(e.pointerId, { x: e.clientX / innerWidth, y: e.clientY / innerHeight, px: e.clientX, py: e.clientY });
   morph.touching = true; morphFromPointers();
 });
 stage.addEventListener("pointermove", (e) => {
   if (!pointers.has(e.pointerId)) return;
-  pointers.set(e.pointerId, { x: e.clientX / innerWidth, y: e.clientY / innerHeight });
+  pointers.set(e.pointerId, { x: e.clientX / innerWidth, y: e.clientY / innerHeight, px: e.clientX, py: e.clientY });
   morphFromPointers();
 });
 function releasePointer(e) {
@@ -758,7 +763,56 @@ function setPalette(p) { activePal = p; }
 // медленное визуальное состояние: фон эволюционирует за пальцем с большой инерцией
 const vis = { x: 0.5, y: 0.5 };
 const levelArr = new Uint8Array(256);
+const freqArr = new Uint8Array(256);
 let slowLevel = 0, t0 = performance.now();
+
+// ---- спектр → цвет: полосы и центроид, сглаженные ----
+let bBass = 0, bMid = 0, bHigh = 0, curHue = 40;
+
+// ---- частицы (canvas, аддитивные спрайты — дёшево) ----
+const fx = document.getElementById("fx");
+const fxc = fx.getContext("2d");
+let fxW = 0, fxH = 0, fxDpr = 1;
+function sizeFx() {
+  fxDpr = Math.min(2, window.devicePixelRatio || 1);
+  fxW = fx.width = Math.floor(innerWidth * fxDpr);
+  fxH = fx.height = Math.floor(innerHeight * fxDpr);
+}
+sizeFx();
+window.addEventListener("resize", sizeFx);
+
+// 12 предрендеренных светящихся спрайтов по оттенкам — без покадровой генерации градиентов
+const SPRITES = [];
+for (let h = 0; h < 12; h++) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 32;
+  const g = c.getContext("2d");
+  const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, `hsla(${h * 30},90%,74%,1)`);
+  grad.addColorStop(0.4, `hsla(${h * 30},85%,60%,0.5)`);
+  grad.addColorStop(1, `hsla(${h * 30},80%,50%,0)`);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 32, 32);
+  SPRITES.push(c);
+}
+const parts = [];
+const MAX_PARTS = 110;
+function spawnPart(px, py, hue, boost) {
+  if (parts.length >= MAX_PARTS) return;
+  const a = Math.random() * Math.PI * 2;
+  const sp = (0.4 + Math.random() * 1.5) * (1 + boost * 2) * fxDpr;
+  parts.push({
+    x: px * fxDpr, y: py * fxDpr,
+    vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+    life: 1, decay: 0.008 + Math.random() * 0.016,
+    size: (5 + Math.random() * 14) * fxDpr,
+    spr: SPRITES[((((hue % 360) + 360) % 360 / 30) | 0) % 12],
+  });
+}
+
+// горячее пятно под пальцем
+const glowEl = document.getElementById("touchGlow");
+let gx = 0, gy = 0, gOp = 0, glowBucket = -1;
 
 function animate() {
   // ease morph (звук реагирует быстрее, чем фон)
@@ -778,6 +832,22 @@ function animate() {
     let sum = 0;
     for (let i = 0; i < levelArr.length; i++) { const v = (levelArr[i] - 128) / 128; sum += v * v; }
     level = Math.sqrt(sum / levelArr.length);
+
+    // спектр: полосы питают блобы, центроид красит частицы и глоу
+    an.getByteFrequencyData(freqArr);
+    let s1 = 0, s2 = 0, s3 = 0, wsum = 0, vsum = 0;
+    for (let i = 1; i < 6; i++) s1 += freqArr[i];
+    for (let i = 6; i < 33; i++) s2 += freqArr[i];
+    for (let i = 33; i < 121; i++) s3 += freqArr[i];
+    for (let i = 1; i < 128; i++) { wsum += i * freqArr[i]; vsum += freqArr[i]; }
+    bBass += (s1 / 5 / 255 - bBass) * 0.1;
+    bMid  += (s2 / 27 / 255 - bMid) * 0.1;
+    bHigh += (s3 / 88 / 255 - bHigh) * 0.1;
+    if (vsum > 500) {
+      const centroid = wsum / vsum / 128; // 0..1
+      const targetHue = 15 + centroid * 560; // тёмный звук — янтарь, яркий — через бирюзу к розовому
+      curHue += (targetHue - curHue) * 0.04;
+    }
   }
   slowLevel += (level - slowLevel) * 0.08;
 
@@ -790,9 +860,10 @@ function animate() {
   const tTop = `translate(${dx}vmin, ${dy * 0.6}vmin) scale(${0.92 + slowLevel * 1.0 + 0.3 * (1 - vis.y) + breathe})`;
   const tMid = `translate(${dx * 1.4}vmin, ${dy}vmin) scaleY(${pulse}) scaleX(${0.9 + slowLevel * 0.8 + breathe})`;
   const tBot = `translate(${dx * 0.7}vmin, ${-dy * 0.8}vmin) scale(${0.95 + slowLevel * 0.7 + 0.35 * vis.y - breathe})`;
-  const oTop = 0.55 + slowLevel * 0.7 + 0.15 * (1 - vis.y);
-  const oMid = 0.4 + slowLevel * 1.0;
-  const oBot = 0.5 + slowLevel * 0.7 + 0.2 * vis.y;
+  // полосы спектра дышат в блобы: низы — вниз, верха — вверх
+  const oTop = (0.45 + slowLevel * 0.55 + 0.15 * (1 - vis.y)) * (0.55 + 0.85 * bHigh);
+  const oMid = (0.35 + slowLevel * 0.8) * (0.55 + 0.85 * bMid);
+  const oBot = (0.45 + slowLevel * 0.55 + 0.2 * vis.y) * (0.55 + 0.85 * bBass);
 
   for (const name in palEls) {
     const P = palEls[name];
@@ -804,6 +875,62 @@ function animate() {
     P.top.style.transform = tTop; P.top.style.opacity = oTop;
     P.mid.style.transform = tMid; P.mid.style.opacity = oMid;
     P.bot.style.transform = tBot; P.bot.style.opacity = oBot;
+  }
+
+  // ---- горячее пятно под пальцем (kaoss) ----
+  if (pointers.size) {
+    let ax = 0, ay = 0;
+    pointers.forEach(p => { ax += p.px; ay += p.py; });
+    ax /= pointers.size; ay /= pointers.size;
+    gx += (ax - gx) * 0.28; gy += (ay - gy) * 0.28;
+    gOp += (0.85 - gOp) * 0.15;
+  } else {
+    gOp += (0 - gOp) * 0.05; // мягко гаснет, оставляя послесвечение
+  }
+  if (gOp > 0.01) {
+    // градиент пересобираем только при смене оттенка (не каждый кадр)
+    const bucket = ((curHue % 360) / 24) | 0;
+    if (bucket !== glowBucket) {
+      glowBucket = bucket;
+      const h = curHue % 360;
+      glowEl.style.background =
+        `radial-gradient(circle at 50% 50%, hsla(${h},92%,72%,0.95), hsla(${h},85%,55%,0.35) 45%, transparent 70%)`;
+    }
+    const gs = 0.7 + level * 1.6;
+    glowEl.style.transform = `translate3d(${gx}px, ${gy}px, 0) translate(-50%, -50%) scale(${gs.toFixed(3)})`;
+    glowEl.style.opacity = gOp.toFixed(3);
+  } else {
+    glowEl.style.opacity = "0";
+  }
+
+  // ---- частицы ----
+  if (pointers.size && buffer) {
+    pointers.forEach(p => {
+      spawnPart(p.px, p.py, curHue + (Math.random() - 0.5) * 60, level);
+      if (Math.random() < 0.5) spawnPart(p.px, p.py, curHue + (Math.random() - 0.5) * 60, level);
+    });
+  }
+  // редкие искры из пламени, когда просто играет
+  if (!pointers.size && schedulerId && Math.random() < 0.10 + slowLevel * 0.3) {
+    spawnPart(
+      innerWidth * (0.5 + (vis.x - 0.5) * 0.3) + (Math.random() - 0.5) * 80,
+      innerHeight * (0.3 + Math.random() * 0.35),
+      curHue + (Math.random() - 0.5) * 60, slowLevel);
+  }
+  fxc.clearRect(0, 0, fxW, fxH);
+  if (parts.length) {
+    fxc.globalCompositeOperation = "lighter";
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.985; p.vy = p.vy * 0.985 - 0.012 * fxDpr; // лёгкая тяга вверх
+      p.life -= p.decay;
+      if (p.life <= 0) { parts.splice(i, 1); continue; }
+      fxc.globalAlpha = p.life * p.life;
+      fxc.drawImage(p.spr, p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    fxc.globalAlpha = 1;
+    fxc.globalCompositeOperation = "source-over";
   }
 
   requestAnimationFrame(animate);
