@@ -203,9 +203,9 @@
   <div class="palette" data-pal="rec"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
   <div id="touchGlow"></div>
   <canvas id="fx"></canvas>
-  <span class="corner tl">Air</span>
+  <span class="corner tl">Halo</span>
   <span class="corner tr">Pulse</span>
-  <span class="corner bl">Deep</span>
+  <span class="corner bl">Tide</span>
   <span class="corner br">Chaos</span>
 </div>
 
@@ -258,7 +258,7 @@ const KNOBS = {
 // morph point (XY pad), 0..1, center = neutral
 const morph = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5, touching: false };
 
-let ctx, master, analyser, reverbIn, dryGate, buffer = null;
+let ctx, master, analyser, reverbIn, dryGate, buffer = null, revBuf = null;
 let playing = true, schedulerId = null, nextGrainTime = 0;
 let currentName = "—", currentId = null;
 
@@ -355,6 +355,16 @@ function trimToMax(buf) {
   return out;
 }
 
+// реверс-копия сэмпла: зёрна задом наперёд звучат «как сон», тональность не меняется
+function reverseBuffer(buf) {
+  const out = ctx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+    const s = buf.getChannelData(ch), d = out.getChannelData(ch);
+    for (let i = 0, n = buf.length; i < n; i++) d[i] = s[n - 1 - i];
+  }
+  return out;
+}
+
 // только усиливаем тихое (записи с микрофона), громкое не трогаем
 function normalizeBuffer(buf, target = 0.85) {
   let peak = 0;
@@ -393,35 +403,48 @@ function scheduleGrain(when) {
   const c = cornerStrengths();
   const S = KNOBS.S.value;
 
-  let sizeMs = KNOBS.G.value * (1 - 0.55 * c.tl) * (1 + 1.6 * c.bl);
-  // Chaos: случайные, но гармоничные интервалы (октавы/квинты/кварты),
-  // взвешены к тонике — дико, но в строе
+  // Halo (TL): без транспонирования всего звука — вероятностные октавные
+  // блёстки, мелкие зёрна, реверс-зёрна, много шиммера. Гармония, не сдвиг.
+  // Tide (BL): «прилив» — длинные зёрна, позиция медленно плывёт по сэмплу,
+  // хорус-детюн ±30 центов, редкие суб-октавы.
+  // Chaos (BR): случайные, но гармоничные интервалы, взвешены к тонике.
+  let sizeMs = KNOBS.G.value * (1 - 0.4 * c.tl) * (1 + 1.8 * c.bl);
   const HARMONY = [0, 0, 0, 7, -7, 12, -12, 5, -5];
-  let pitch = 12 * c.tl - 12 * c.bl;
+  let pitch = 0;
+  if (Math.random() < c.tl * 0.5) pitch += Math.random() < 0.7 ? 12 : 7;
+  if (Math.random() < c.bl * 0.25) pitch -= 12;
   if (Math.random() < c.br) pitch += HARMONY[(Math.random() * HARMONY.length) | 0];
+  pitch += (Math.random() - 0.5) * 0.6 * c.bl; // хорус-тепло, не фальшь
+  const reverse = !!revBuf && Math.random() < (0.12 + 0.5 * c.tl + 0.25 * c.bl);
   const sprayMs = 20 + 260 * S + 350 * c.br;
   const panAmt = 0.25 + 0.75 * S;
-  const shimmerSend = 0.18 + 0.45 * S + 0.35 * c.tl;
+  const shimmerSend = 0.18 + 0.45 * S + 0.4 * c.tl + 0.3 * c.bl;
 
   const dur = sizeMs / 1000;
   const jitter = (Math.random() * 2 - 1) * (sprayMs / 1000);
-  let startSec = KNOBS.P.value * buffer.duration + jitter;
+  const tide = Math.sin(performance.now() / 1000 * 0.45) * 0.12 * c.bl;
+  let startSec = (KNOBS.P.value + tide) * buffer.duration + jitter;
   startSec = Math.max(0, Math.min(buffer.duration - 0.001, startSec));
   const rate = Math.pow(2, pitch / 12);
 
   const dens = effDensity();
   const peak = Math.min(0.9, 1.4 / Math.sqrt(dens));
 
-  spawnVoice(when, startSec, dur, rate, panAmt, peak, shimmerSend);
+  spawnVoice(when, startSec, dur, rate, panAmt, peak, shimmerSend, false, reverse);
   // shimmer voice: +1 octave, mostly into reverb
   if (Math.random() < 0.4 + 0.5 * c.tl) {
-    spawnVoice(when + 0.01, startSec, dur * 1.4, rate * 2, panAmt, peak * (0.25 + 0.3 * S), 1.0, true);
+    spawnVoice(when + 0.01, startSec, dur * 1.4, rate * 2, panAmt, peak * (0.25 + 0.3 * S), 1.0, true, reverse);
   }
 }
 
-function spawnVoice(when, startSec, dur, rate, panAmt, peak, sendAmt, wetOnly) {
+function spawnVoice(when, startSec, dur, rate, panAmt, peak, sendAmt, wetOnly, reverse) {
+  let buf = buffer;
+  if (reverse && revBuf) {
+    buf = revBuf;
+    startSec = Math.max(0, buf.duration - startSec - dur * rate);
+  }
   const src = ctx.createBufferSource();
-  src.buffer = buffer;
+  src.buffer = buf;
   src.playbackRate.value = rate;
   const g = ctx.createGain();
   g.gain.value = 0;
@@ -434,14 +457,15 @@ function spawnVoice(when, startSec, dur, rate, panAmt, peak, sendAmt, wetOnly) {
   send.gain.value = sendAmt;
   pan.connect(send).connect(reverbIn);
   const srcDur = dur * rate;
-  src.start(when, startSec, Math.min(srcDur, buffer.duration - startSec));
+  src.start(when, startSec, Math.min(srcDur, buf.duration - startSec));
   src.stop(when + dur + 0.02);
   src.onended = () => { src.disconnect(); g.disconnect(); pan.disconnect(); send.disconnect(); };
 }
 
 function effDensity() {
   const c = cornerStrengths();
-  return KNOBS.D.value * (1 + 1.2 * c.tr + 0.6 * c.br);
+  // Tide: меньше зёрен, но длиннее — глубокая волна, не каша
+  return KNOBS.D.value * (1 + 1.2 * c.tr + 0.6 * c.br) * (1 - 0.3 * c.bl);
 }
 
 // ---- транс-гейт (угол Pulse): 16-е на 126 BPM, глубина = сила угла ----
@@ -520,6 +544,7 @@ async function useBlob(blob, name, id) {
   try {
     const buf = await decode(await blob.arrayBuffer());
     buffer = normalizeBuffer(trimToMax(buf));
+    revBuf = reverseBuffer(buffer);
     setCurrent(name, id);
     if (playing) startCloud();
     return true;
@@ -543,6 +568,7 @@ async function loadFile(file) {
 
 function useBuiltin() {
   buffer = genPad();
+  revBuf = reverseBuffer(buffer);
   setCurrent("Pad · встроенный", null);
   if (playing) startCloud();
 }
@@ -752,6 +778,7 @@ document.querySelectorAll(".palette").forEach(el => {
   };
 });
 let activePal = "ember", samplePal = "ember";
+const SHOW_FLAME = false; // фон-градиент временно выключен (вернуть: true)
 
 function paletteFor(name) {
   let h = 0;
@@ -868,7 +895,7 @@ function animate() {
   for (const name in palEls) {
     const P = palEls[name];
     // кроссфейд палитр — медленный, ~3-4 секунды
-    const target = name === activePal ? 1 : 0;
+    const target = SHOW_FLAME && name === activePal ? 1 : 0;
     P.op += (target - P.op) * 0.012;
     P.el.style.opacity = P.op.toFixed(3);
     if (P.op < 0.005) continue;
