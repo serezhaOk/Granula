@@ -196,7 +196,7 @@
   <div class="palette" data-pal="nebula"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
   <div class="palette" data-pal="rec"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
   <span class="corner tl">Air</span>
-  <span class="corner tr">Swarm</span>
+  <span class="corner tr">Pulse</span>
   <span class="corner bl">Deep</span>
   <span class="corner br">Chaos</span>
 </div>
@@ -250,7 +250,7 @@ const KNOBS = {
 // morph point (XY pad), 0..1, center = neutral
 const morph = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5, touching: false };
 
-let ctx, master, analyser, reverbIn, buffer = null;
+let ctx, master, analyser, reverbIn, dryGate, buffer = null;
 let playing = true, schedulerId = null, nextGrainTime = 0;
 let currentName = "—", currentId = null;
 
@@ -285,6 +285,11 @@ function initAudio() {
   analyser = ctx.createAnalyser();
   analyser.fftSize = 512;
   master.connect(analyser).connect(ctx.destination);
+
+  // транс-гейт: режет только сухие зёрна, реверб-облако остаётся непрерывным
+  dryGate = ctx.createGain();
+  dryGate.gain.value = 1;
+  dryGate.connect(master);
 
   // shimmer reverb: bus -> convolver(6s) -> gain -> master
   reverbIn = ctx.createGain();
@@ -381,8 +386,12 @@ function scheduleGrain(when) {
   const S = KNOBS.S.value;
 
   let sizeMs = KNOBS.G.value * (1 - 0.55 * c.tl) * (1 + 1.6 * c.bl);
-  let pitch = 12 * c.tl - 12 * c.bl + (Math.random() * 2 - 1) * 7 * c.br;
-  const sprayMs = 20 + 260 * S + 350 * c.br + 120 * c.tr;
+  // Chaos: случайные, но гармоничные интервалы (октавы/квинты/кварты),
+  // взвешены к тонике — дико, но в строе
+  const HARMONY = [0, 0, 0, 7, -7, 12, -12, 5, -5];
+  let pitch = 12 * c.tl - 12 * c.bl;
+  if (Math.random() < c.br) pitch += HARMONY[(Math.random() * HARMONY.length) | 0];
+  const sprayMs = 20 + 260 * S + 350 * c.br;
   const panAmt = 0.25 + 0.75 * S;
   const shimmerSend = 0.18 + 0.45 * S + 0.35 * c.tl;
 
@@ -412,7 +421,7 @@ function spawnVoice(when, startSec, dur, rate, panAmt, peak, sendAmt, wetOnly) {
   const pan = ctx.createStereoPanner();
   pan.pan.value = (Math.random() * 2 - 1) * panAmt;
   src.connect(g).connect(pan);
-  if (!wetOnly) pan.connect(master);
+  if (!wetOnly) pan.connect(dryGate);
   const send = ctx.createGain();
   send.gain.value = sendAmt;
   pan.connect(send).connect(reverbIn);
@@ -424,7 +433,27 @@ function spawnVoice(when, startSec, dur, rate, panAmt, peak, sendAmt, wetOnly) {
 
 function effDensity() {
   const c = cornerStrengths();
-  return KNOBS.D.value * (1 + 2.2 * c.tr + 0.6 * c.br);
+  return KNOBS.D.value * (1 + 1.2 * c.tr + 0.6 * c.br);
+}
+
+// ---- транс-гейт (угол Pulse): 16-е на 126 BPM, глубина = сила угла ----
+const GATE_STEP = 60 / 126 / 4;
+let nextGateTime = 0;
+function gateTick() {
+  if (!ctx) return;
+  if (nextGateTime < ctx.currentTime) nextGateTime = ctx.currentTime;
+  const depth = cornerStrengths().tr;
+  const ahead = ctx.currentTime + 0.18;
+  while (nextGateTime < ahead) {
+    const t = nextGateTime;
+    if (depth > 0.02) {
+      dryGate.gain.setTargetAtTime(1, t, 0.006);
+      dryGate.gain.setTargetAtTime(1 - 0.97 * depth, t + GATE_STEP * 0.5, 0.01);
+    } else {
+      dryGate.gain.setTargetAtTime(1, t, 0.03);
+    }
+    nextGateTime += GATE_STEP;
+  }
 }
 
 const LOOKAHEAD = 0.12, TICK = 25;
@@ -831,6 +860,7 @@ $("start").addEventListener("click", async () => {
   // не ждём resume: если ОС тянет с активацией аудио, UI всё равно строим,
   // звук поднимет страховочный pointerdown-обработчик
   ctx.resume().catch(() => {});
+  setInterval(gateTick, 25);
   restoreKnobs();
   for (const k of ["G", "P", "D", "S"]) makeKnob(k);
   $("start").classList.remove("show");
