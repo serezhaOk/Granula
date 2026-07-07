@@ -176,7 +176,13 @@
   }
   .librow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .librow .dur { color: var(--dim); font-size: 12px; }
-  .librow .del { background: none; border: none; color: var(--dim); font-size: 16px; padding: 4px 8px; }
+  .librow .del, .librow .edit { background: none; border: none; color: var(--dim); font-size: 16px; padding: 4px 8px; }
+  .librow input.nm-edit {
+    flex: 1; min-width: 0; background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 6px;
+    color: #fff; font-size: 14px; padding: 6px 8px; outline: none;
+    user-select: text; -webkit-user-select: text;
+  }
   .librow.current .nm { color: var(--yellow); }
   #loadFileRow { color: var(--yellow); font-weight: 600; }
 
@@ -522,9 +528,57 @@ function idb(mode, fn) {
   });
 }
 const dbAdd = (rec) => idb("readwrite", s => s.add(rec));
+const dbPut = (rec) => idb("readwrite", s => s.put(rec));
 const dbAll = () => idb("readonly", s => s.getAll());
 const dbGet = (id) => idb("readonly", s => s.get(id));
 const dbDel = (id) => idb("readwrite", s => s.delete(id));
+
+// ================= имена записей: флора и фауна =================
+const NAME_SINGLES = ("Mycelium Nightjar Sphagnum Bryophyte Chanterelle Murmuration Foxglove Mandrake Nightshade " +
+  "Wolfsbane Yarrow Vervain Mugwort Tansy Betony Amanita Morel Puffball Inkcap Waxwing Redstart Dunnock " +
+  "Goshawk Merlin Kestrel Kite Shrike Corncrake Bittern Godwit Whimbrel Dotterel Wheatear Stonechat " +
+  "Brambling Siskin Twite Serin Crossbill Hawfinch Nuthatch Treecreeper Goldcrest Firecrest Chiffchaff " +
+  "Blackcap Whitethroat Nightingale Bullfinch Linnet Skylark Woodlark Pipit Wagtail Dipper Kingfisher " +
+  "Wryneck Hoopoe Cuckoo Swift Swallow Martin Starling Fieldfare Redwing Ouzel Raven Rook Jackdaw Magpie " +
+  "Chough Lapwing Snipe Woodcock Sanderling Dunlin Knot Ruff Turnstone Avocet Shelduck Teal Wigeon " +
+  "Pintail Pochard Goldeneye Smew Eider Scoter Gannet Fulmar Shearwater Petrel Guillemot Razorbill " +
+  "Puffin Kittiwake Skua Tern Osprey Harrier Buzzard Hobby Peregrine Saxifrage Stonecrop Bogbean " +
+  "Sundew Butterwort Bladderwort Milkwort Eyebright Selfheal Bugle Woundwort Figwort Toadflax Speedwell " +
+  "Cowslip Oxlip Campion Ragwort Knapweed Scabious Teasel Burdock Mallow Meadowsweet Loosestrife " +
+  "Angelica Hogweed Pignut Sanicle Moschatel Twayblade Helleborine Ramsons Bistort Tormentil Cinquefoil " +
+  "Agrimony Avens Burnet Dropwort Cloudberry Dewberry Bilberry Crowberry Cowberry Juniper Yew Hornbeam " +
+  "Wychelm Blackthorn Buckthorn Guelder Spindle Dogwood Wayfaring Whitebeam Medlar Quince Damson Sloe " +
+  "Samphire Glasswort Eelgrass Wrack Kelp Dulse Carrageen Limpet Whelk Cockle Razorshell Cuttlefish " +
+  "Brittlestar Anemone Barnacle Sandhopper Lugworm Ragworm Shipworm Glowworm Slowworm Lacewing Alderfly " +
+  "Caddisfly Mayfly Damselfly Hawkmoth Silkmoth Lappet Drinker Ermine Footman Tussock Underwing Carpet " +
+  "Pug Wainscot Rustic Quaker Chestnut Sallow Brindle Shark Snout Thorn Beauty Emerald Arches Dart " +
+  "Minor Fanfoot Silverline Burnet Forester Longhorn Weevil Chafer Dorbeetle Sexton Glowfly Springtail " +
+  "Bristletail Silverfish Firebrat Katydid Bushcricket Groundhopper Froghopper Leafhopper Lacebug " +
+  "Shieldbug Damselbug Waterboatman Backswimmer Pondskater Whirligig Diving Beetle Scorpionfly Snakefly")
+  .split(/\s+/).filter(w => w.length > 3);
+const NAME_ADJ = ("Silent Lunar Velvet Hollow Amber Feral Misty Dusky Pale Wild Creeping Whispering Gilded " +
+  "Mossy Fading Spectral Drifting Woven Umbral Verdant Sleeping Wandering Thorned Dappled Brackish Silver " +
+  "Ashen Ember Twilight Boreal Tidal Sylvan Obsidian Opaline Cinder Hidden").split(" ");
+const NAME_NOUN = ("Moth Fern Lichen Owl Reed Moss Heron Beetle Willow Ivy Nettle Orchid Bracken Thistle " +
+  "Wren Newt Toadstool Bramble Alder Rowan Sedge Vole Lark Finch Adder Hare Badger Cricket Cicada Mantis " +
+  "Dragonfly Hawthorn Elder Aspen Plover Curlew Weasel Stoat Polecat Marten").split(" ");
+
+let namePool = null;
+function randomRecName() {
+  if (!namePool) {
+    namePool = NAME_SINGLES.slice();
+    for (const a of NAME_ADJ) for (const n of NAME_NOUN) namePool.push(a + " " + n);
+  }
+  let used;
+  try { used = new Set(JSON.parse(localStorage.getItem("granula-used-names") || "[]")); }
+  catch (e) { used = new Set(); }
+  let candidates = namePool.filter(n => !used.has(n));
+  if (!candidates.length) { used.clear(); candidates = namePool; } // пул исчерпан — повторы снова допустимы
+  const name = candidates[(Math.random() * candidates.length) | 0];
+  used.add(name);
+  try { localStorage.setItem("granula-used-names", JSON.stringify([...used])); } catch (e) {}
+  return name;
+}
 
 // ================= sample loading =================
 function setCurrent(name, id) {
@@ -638,9 +692,7 @@ async function startRec() {
     unmuteMaster();
 
     const blob = new Blob(recChunks, { type: mediaRec.mimeType || "audio/webm" });
-    const d = new Date();
-    const name = "Rec " + String(d.getDate()).padStart(2,"0") + "." + String(d.getMonth()+1).padStart(2,"0") +
-                 " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+    const name = randomRecName();
     const ok = await useBlob(blob, name, null);
     if (!ok) { if (playing && buffer) startCloud(); return; }
     try {
@@ -984,10 +1036,15 @@ async function renderLibrary() {
   for (const r of rows) {
     const el = document.createElement("div");
     el.className = "librow" + (r.id === currentId ? " current" : "");
-    el.innerHTML = `<span class="nm">${r.name}</span><span class="dur">${r.duration.toFixed(1)}s</span><button class="del">✕</button>`;
+    el.innerHTML = `<span class="nm"></span><span class="dur">${r.duration.toFixed(1)}s</span><button class="edit">✎</button><button class="del">✕</button>`;
+    el.querySelector(".nm").textContent = r.name;
     el.querySelector(".nm").addEventListener("click", async () => {
       const rec = await dbGet(r.id);
       if (rec && await useBlob(rec.blob, rec.name, rec.id)) { hideLibrary(); renderLibrary(); }
+    });
+    el.querySelector(".edit").addEventListener("click", (e) => {
+      e.stopPropagation();
+      startRename(el, r);
     });
     el.querySelector(".del").addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -997,6 +1054,40 @@ async function renderLibrary() {
     });
     list.appendChild(el);
   }
+}
+
+// инлайн-переименование: ✎ → инпут, Enter/блюр — сохранить в IndexedDB
+function startRename(rowEl, r) {
+  const nm = rowEl.querySelector(".nm");
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "nm-edit";
+  input.maxLength = 40;
+  input.value = r.name;
+  nm.replaceWith(input);
+  input.focus();
+  input.select();
+  const commit = async () => {
+    const newName = input.value.trim();
+    if (newName && newName !== r.name) {
+      const rec = await dbGet(r.id);
+      if (rec) {
+        rec.name = newName;
+        await dbPut(rec);
+        if (r.id === currentId) {
+          setCurrent(newName, r.id);
+          samplePal = paletteFor(newName);
+          setPalette(samplePal);
+        }
+      }
+    }
+    renderLibrary();
+  };
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") input.blur();
+    if (ev.key === "Escape") { input.value = r.name; input.blur(); }
+  });
+  input.addEventListener("blur", commit, { once: true });
 }
 function showLibrary() { renderLibrary(); $("library").classList.add("show"); }
 function hideLibrary() { $("library").classList.remove("show"); }
