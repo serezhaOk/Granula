@@ -942,7 +942,7 @@ function animate() {
   for (let i = 0; i < gInt.length; i++) {
     const val = gInt[i];
     if (val < 0.02) { if (val !== 0) gInt[i] = 0; continue; }
-    gInt[i] = val * 0.65; // хвост затухания (очень короткий)
+    gInt[i] = val * 0.75; // хвост затухания
     const x = (i % gCols) * CELL, y = ((i / gCols) | 0) * CELL;
     if (Math.random() < flick) gGlyph[i] = (Math.random() * GLYPHS.length) | 0;
     fxc.fillStyle = gCol[i];
