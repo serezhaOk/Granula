@@ -803,12 +803,12 @@ const CORNER_RGB = {
   tl: [90, 200, 255], tr: [255, 80, 200],
   bl: [90, 230, 120], br: [255, 145, 50],
 };
-let CELL = 19, gCols = 0, gRows = 0;
+let CELL = 24, gCols = 0, gRows = 0;
 let gInt = new Float32Array(0), gGlyph = new Uint8Array(0), gCol = [];
 let dotsLayer = null;
 
 function initGrid() {
-  CELL = Math.round(19 * fxDpr);
+  CELL = Math.round(24 * fxDpr);
   gCols = Math.ceil(fxW / CELL);
   gRows = Math.ceil(fxH / CELL);
   const n = gCols * gRows;
@@ -855,15 +855,14 @@ function ignite(pxCss, pyCss, strength, u, v) {
   if (!gCols) return;
   const cx = (pxCss * fxDpr / CELL) | 0, cy = (pyCss * fxDpr / CELL) | 0;
   const base = cornerColor(Math.max(0, Math.min(1, u)), Math.max(0, Math.min(1, v)));
-  for (let dy = -4; dy <= 4; dy++) {
-    for (let dx = -4; dx <= 4; dx++) {
+  for (let dy = -3; dy <= 3; dy++) {
+    for (let dx = -3; dx <= 3; dx++) {
       const x = cx + dx, y = cy + dy;
       if (x < 0 || y < 0 || x >= gCols || y >= gRows) continue;
       const d2 = dx * dx + dy * dy;
-      if (d2 > 18) continue;
-      if (d2 > 9 && Math.random() < 0.45) continue; // рваный внешний край
-      // линейный спад — ореол читается на 3-4 ряда от ядра
-      const f = strength * Math.max(0, 1 - Math.sqrt(d2) / 4.6);
+      if (d2 > 11) continue;
+      if (d2 > 6 && Math.random() < 0.45) continue; // рваный внешний край
+      const f = strength * Math.max(0, 1 - Math.sqrt(d2) / 3.2);
       const i = y * gCols + x;
       if (f > gInt[i]) {
         gInt[i] = Math.min(1, f);
@@ -937,19 +936,13 @@ function animate() {
   if (pointers.size && buffer) {
     pointers.forEach(p => ignite(p.px, p.py, 0.85 + level * 0.4, p.x, p.y));
   }
-  // без касания: редкие тихие вспышки — поле живёт в такт звуку
-  if (!pointers.size && schedulerId && Math.random() < 0.05 + slowLevel * 0.25) {
-    const u = Math.random(), v = 0.2 + Math.random() * 0.6;
-    ignite(innerWidth * u, innerHeight * v, 0.22 + slowLevel * 0.4, u, v);
-  }
-
   fxc.clearRect(0, 0, fxW, fxH);
   if (dotsLayer) fxc.drawImage(dotsLayer, 0, 0);
   const flick = 0.2 + level * 0.45; // звук ускоряет перебор символов
   for (let i = 0; i < gInt.length; i++) {
     const val = gInt[i];
     if (val < 0.02) { if (val !== 0) gInt[i] = 0; continue; }
-    gInt[i] = val * 0.90; // хвост затухания (короткий)
+    gInt[i] = val * 0.65; // хвост затухания (очень короткий)
     const x = (i % gCols) * CELL, y = ((i / gCols) | 0) * CELL;
     if (Math.random() < flick) gGlyph[i] = (Math.random() * GLYPHS.length) | 0;
     fxc.fillStyle = gCol[i];
@@ -964,7 +957,7 @@ function animate() {
       }
     } else {
       // ореол: полупрозрачная заливка на всех ячейках кластера — радиус нажатия виден
-      fxc.globalAlpha = 0.06 + val * 0.30;
+      fxc.globalAlpha = 0.12 + val * 0.5;
       fxc.fillRect(x + CELL * 0.06, y + CELL * 0.06, CELL * 0.88, CELL * 0.88);
       fxc.globalAlpha = Math.min(1, val * 1.35);
       fxc.fillText(GLYPHS[gGlyph[i]], x + CELL / 2, y + CELL / 2 + 1);
