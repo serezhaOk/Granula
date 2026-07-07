@@ -63,11 +63,7 @@
     rgba(96,74,228,0.95) 0%, rgba(70,52,180,0.5) 45%, transparent 75%); }
 
   /* горячее пятно под пальцем (kaoss) + канвас частиц */
-  #touchGlow {
-    position: absolute; left: 0; top: 0; width: 44vmin; height: 44vmin;
-    border-radius: 50%; pointer-events: none; opacity: 0;
-    mix-blend-mode: screen; will-change: transform, opacity;
-  }
+  #touchGlow { display: none; } /* заменён ASCII-сеткой */
   #fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
   /* rec: розово-фиолетовое свечение */
@@ -793,53 +789,90 @@ const levelArr = new Uint8Array(256);
 const freqArr = new Uint8Array(256);
 let slowLevel = 0, t0 = performance.now();
 
-// ---- спектр → цвет: полосы и центроид, сглаженные ----
-let bBass = 0, bMid = 0, bHigh = 0, curHue = 40;
+// ---- спектр: полосы (питают пламя, когда включено) ----
+let bBass = 0, bMid = 0, bHigh = 0;
 
-// ---- частицы (canvas, аддитивные спрайты — дёшево) ----
+// ---- ASCII-частицы (стиль Cogmind): поле точек, вспышки глифов под пальцем ----
 const fx = document.getElementById("fx");
 const fxc = fx.getContext("2d");
 let fxW = 0, fxH = 0, fxDpr = 1;
+
+const GLYPHS = ".:;+*=!?/\\|<>[]{}()#%&$~^',";
+// цвета углов: Halo голубой, Pulse маджента, Tide зелёный, Chaos оранжевый
+const CORNER_RGB = {
+  tl: [90, 200, 255], tr: [255, 80, 200],
+  bl: [90, 230, 120], br: [255, 145, 50],
+};
+let CELL = 18, gCols = 0, gRows = 0;
+let gInt = new Float32Array(0), gGlyph = new Uint8Array(0), gCol = [];
+let dotsLayer = null;
+
+function initGrid() {
+  CELL = Math.round(18 * fxDpr);
+  gCols = Math.ceil(fxW / CELL);
+  gRows = Math.ceil(fxH / CELL);
+  const n = gCols * gRows;
+  gInt = new Float32Array(n);
+  gGlyph = new Uint8Array(n);
+  gCol = new Array(n).fill("");
+  // фоновое поле тусклых точек — рисуем один раз в офскрин
+  dotsLayer = document.createElement("canvas");
+  dotsLayer.width = fxW; dotsLayer.height = fxH;
+  const d = dotsLayer.getContext("2d");
+  d.fillStyle = "#9aa0b4";
+  const s = Math.max(1, Math.round(CELL * 0.08));
+  for (let r = 0; r < gRows; r++)
+    for (let c = 0; c < gCols; c++) {
+      d.globalAlpha = 0.07 + Math.random() * 0.10;
+      d.fillRect(c * CELL + (CELL - s) / 2, r * CELL + (CELL - s) / 2, s, s);
+    }
+  fxc.font = `bold ${Math.round(CELL * 0.74)}px Menlo, Consolas, monospace`;
+  fxc.textAlign = "center";
+  fxc.textBaseline = "middle";
+}
 function sizeFx() {
   fxDpr = Math.min(2, window.devicePixelRatio || 1);
   fxW = fx.width = Math.floor(innerWidth * fxDpr);
   fxH = fx.height = Math.floor(innerHeight * fxDpr);
+  initGrid();
 }
 sizeFx();
 window.addEventListener("resize", sizeFx);
 
-// 12 предрендеренных светящихся спрайтов по оттенкам — без покадровой генерации градиентов
-const SPRITES = [];
-for (let h = 0; h < 12; h++) {
-  const c = document.createElement("canvas");
-  c.width = c.height = 32;
-  const g = c.getContext("2d");
-  const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-  grad.addColorStop(0, `hsla(${h * 30},90%,74%,1)`);
-  grad.addColorStop(0.4, `hsla(${h * 30},85%,60%,0.5)`);
-  grad.addColorStop(1, `hsla(${h * 30},80%,50%,0)`);
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 32, 32);
-  SPRITES.push(c);
-}
-const parts = [];
-const MAX_PARTS = 110;
-function spawnPart(px, py, hue, boost) {
-  if (parts.length >= MAX_PARTS) return;
-  const a = Math.random() * Math.PI * 2;
-  const sp = (0.4 + Math.random() * 1.5) * (1 + boost * 2) * fxDpr;
-  parts.push({
-    x: px * fxDpr, y: py * fxDpr,
-    vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-    life: 1, decay: 0.008 + Math.random() * 0.016,
-    size: (5 + Math.random() * 14) * fxDpr,
-    spr: SPRITES[((((hue % 360) + 360) % 360 / 30) | 0) % 12],
-  });
+// цвет = билинейная смесь углов по позиции пальца
+function cornerColor(u, v) {
+  const w = { tl: (1 - u) * (1 - v), tr: u * (1 - v), bl: (1 - u) * v, br: u * v };
+  let r = 0, g = 0, b = 0;
+  for (const k in w) {
+    r += CORNER_RGB[k][0] * w[k];
+    g += CORNER_RGB[k][1] * w[k];
+    b += CORNER_RGB[k][2] * w[k];
+  }
+  return [r, g, b];
 }
 
-// горячее пятно под пальцем
-const glowEl = document.getElementById("touchGlow");
-let gx = 0, gy = 0, gOp = 0, glowBucket = -1;
+function ignite(pxCss, pyCss, strength, u, v) {
+  if (!gCols) return;
+  const cx = (pxCss * fxDpr / CELL) | 0, cy = (pyCss * fxDpr / CELL) | 0;
+  const base = cornerColor(Math.max(0, Math.min(1, u)), Math.max(0, Math.min(1, v)));
+  for (let dy = -3; dy <= 3; dy++) {
+    for (let dx = -3; dx <= 3; dx++) {
+      const x = cx + dx, y = cy + dy;
+      if (x < 0 || y < 0 || x >= gCols || y >= gRows) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > 10) continue;
+      if (d2 > 4 && Math.random() < 0.55) continue; // рваные края кластера
+      const f = strength * Math.exp(-d2 * 0.5);
+      const i = y * gCols + x;
+      if (f > gInt[i]) {
+        gInt[i] = Math.min(1, f);
+        const j = 0.8 + Math.random() * 0.45; // разброс яркости соседей
+        gCol[i] = `rgb(${Math.min(255, base[0] * j) | 0},${Math.min(255, base[1] * j) | 0},${Math.min(255, base[2] * j) | 0})`;
+        gGlyph[i] = (Math.random() * GLYPHS.length) | 0;
+      }
+    }
+  }
+}
 
 function animate() {
   // ease morph (звук реагирует быстрее, чем фон)
@@ -860,21 +893,15 @@ function animate() {
     for (let i = 0; i < levelArr.length; i++) { const v = (levelArr[i] - 128) / 128; sum += v * v; }
     level = Math.sqrt(sum / levelArr.length);
 
-    // спектр: полосы питают блобы, центроид красит частицы и глоу
+    // спектр: полосы питают блобы пламени (когда SHOW_FLAME)
     an.getByteFrequencyData(freqArr);
-    let s1 = 0, s2 = 0, s3 = 0, wsum = 0, vsum = 0;
+    let s1 = 0, s2 = 0, s3 = 0;
     for (let i = 1; i < 6; i++) s1 += freqArr[i];
     for (let i = 6; i < 33; i++) s2 += freqArr[i];
     for (let i = 33; i < 121; i++) s3 += freqArr[i];
-    for (let i = 1; i < 128; i++) { wsum += i * freqArr[i]; vsum += freqArr[i]; }
     bBass += (s1 / 5 / 255 - bBass) * 0.1;
     bMid  += (s2 / 27 / 255 - bMid) * 0.1;
     bHigh += (s3 / 88 / 255 - bHigh) * 0.1;
-    if (vsum > 500) {
-      const centroid = wsum / vsum / 128; // 0..1
-      const targetHue = 15 + centroid * 560; // тёмный звук — янтарь, яркий — через бирюзу к розовому
-      curHue += (targetHue - curHue) * 0.04;
-    }
   }
   slowLevel += (level - slowLevel) * 0.08;
 
@@ -904,61 +931,42 @@ function animate() {
     P.bot.style.transform = tBot; P.bot.style.opacity = oBot;
   }
 
-  // ---- горячее пятно под пальцем (kaoss) ----
-  if (pointers.size) {
-    let ax = 0, ay = 0;
-    pointers.forEach(p => { ax += p.px; ay += p.py; });
-    ax /= pointers.size; ay /= pointers.size;
-    gx += (ax - gx) * 0.28; gy += (ay - gy) * 0.28;
-    gOp += (0.85 - gOp) * 0.15;
-  } else {
-    gOp += (0 - gOp) * 0.05; // мягко гаснет, оставляя послесвечение
+  // ---- ASCII-сетка ----
+  // поджиг ячеек под пальцами (цвет — смесь углов по позиции)
+  if (pointers.size && buffer) {
+    pointers.forEach(p => ignite(p.px, p.py, 0.85 + level * 0.4, p.x, p.y));
   }
-  if (gOp > 0.01) {
-    // градиент пересобираем только при смене оттенка (не каждый кадр)
-    const bucket = ((curHue % 360) / 24) | 0;
-    if (bucket !== glowBucket) {
-      glowBucket = bucket;
-      const h = curHue % 360;
-      glowEl.style.background =
-        `radial-gradient(circle at 50% 50%, hsla(${h},92%,72%,0.95), hsla(${h},85%,55%,0.35) 45%, transparent 70%)`;
-    }
-    const gs = 0.7 + level * 1.6;
-    glowEl.style.transform = `translate3d(${gx}px, ${gy}px, 0) translate(-50%, -50%) scale(${gs.toFixed(3)})`;
-    glowEl.style.opacity = gOp.toFixed(3);
-  } else {
-    glowEl.style.opacity = "0";
+  // без касания: редкие тихие вспышки — поле живёт в такт звуку
+  if (!pointers.size && schedulerId && Math.random() < 0.05 + slowLevel * 0.25) {
+    const u = Math.random(), v = 0.2 + Math.random() * 0.6;
+    ignite(innerWidth * u, innerHeight * v, 0.22 + slowLevel * 0.4, u, v);
   }
 
-  // ---- частицы ----
-  if (pointers.size && buffer) {
-    pointers.forEach(p => {
-      spawnPart(p.px, p.py, curHue + (Math.random() - 0.5) * 60, level);
-      if (Math.random() < 0.5) spawnPart(p.px, p.py, curHue + (Math.random() - 0.5) * 60, level);
-    });
-  }
-  // редкие искры из пламени, когда просто играет
-  if (!pointers.size && schedulerId && Math.random() < 0.10 + slowLevel * 0.3) {
-    spawnPart(
-      innerWidth * (0.5 + (vis.x - 0.5) * 0.3) + (Math.random() - 0.5) * 80,
-      innerHeight * (0.3 + Math.random() * 0.35),
-      curHue + (Math.random() - 0.5) * 60, slowLevel);
-  }
   fxc.clearRect(0, 0, fxW, fxH);
-  if (parts.length) {
-    fxc.globalCompositeOperation = "lighter";
-    for (let i = parts.length - 1; i >= 0; i--) {
-      const p = parts[i];
-      p.x += p.vx; p.y += p.vy;
-      p.vx *= 0.985; p.vy = p.vy * 0.985 - 0.012 * fxDpr; // лёгкая тяга вверх
-      p.life -= p.decay;
-      if (p.life <= 0) { parts.splice(i, 1); continue; }
-      fxc.globalAlpha = p.life * p.life;
-      fxc.drawImage(p.spr, p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  if (dotsLayer) fxc.drawImage(dotsLayer, 0, 0);
+  const flick = 0.2 + level * 0.45; // звук ускоряет перебор символов
+  for (let i = 0; i < gInt.length; i++) {
+    const val = gInt[i];
+    if (val < 0.02) { if (val !== 0) gInt[i] = 0; continue; }
+    gInt[i] = val * 0.94; // хвост затухания
+    const x = (i % gCols) * CELL, y = ((i / gCols) | 0) * CELL;
+    if (Math.random() < flick) gGlyph[i] = (Math.random() * GLYPHS.length) | 0;
+    fxc.fillStyle = gCol[i];
+    if (val > 0.78) {
+      // ядро кластера — залитая ячейка, поверх иногда тёмный глиф (как в референсе)
+      fxc.globalAlpha = val;
+      fxc.fillRect(x + CELL * 0.06, y + CELL * 0.06, CELL * 0.88, CELL * 0.88);
+      if (gGlyph[i] & 1) {
+        fxc.globalAlpha = 0.55;
+        fxc.fillStyle = "#000";
+        fxc.fillText(GLYPHS[gGlyph[i]], x + CELL / 2, y + CELL / 2 + 1);
+      }
+    } else {
+      fxc.globalAlpha = Math.min(1, val * 1.35);
+      fxc.fillText(GLYPHS[gGlyph[i]], x + CELL / 2, y + CELL / 2 + 1);
     }
-    fxc.globalAlpha = 1;
-    fxc.globalCompositeOperation = "source-over";
   }
+  fxc.globalAlpha = 1;
 
   requestAnimationFrame(animate);
 }
