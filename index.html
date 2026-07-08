@@ -674,8 +674,8 @@ let recBusy = false, recStream = null; // защита от двойного с�
 const recWave = $("recWave");
 const rwc = recWave.getContext("2d");
 let rwCols = 0, rwRows = 17, rwMid = 0, rwHist = null, rwLastPush = 0, rwDpr = 1, rwBase = null;
-const RW_PITCH = 7, RW_DOT = 3, RW_STEP_MS = 27;
-const RW_BAND_HALF = 17; // высота волны: ±17 точек от центра
+const RW_PITCH = 14, RW_DOT = 3, RW_STEP_MS = 54;
+const RW_BAND_HALF = 9; // высота волны: ±9 точек (шаг вдвое шире, пиксельная высота та же)
 
 function initRecWave() {
   rwDpr = Math.min(2, window.devicePixelRatio || 1);
