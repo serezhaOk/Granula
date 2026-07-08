@@ -191,7 +191,7 @@
     margin-top: 13vh; font-size: 52px; font-weight: 400; color: #fff;
     letter-spacing: 6px; font-variant-numeric: tabular-nums;
   }
-  #recWave { margin-top: 11vh; width: 100%; height: 119px; display: block; }
+  #recWave { margin-top: 7vh; width: 100%; height: 238px; display: block; }
   #stopBtn {
     position: absolute; bottom: calc(env(safe-area-inset-bottom) + 56px);
     width: 132px; height: 42px; border: none; border-radius: 999px;
@@ -672,7 +672,7 @@ let isRecording = false, micAnalyser = null, micSrc = null, recCancelled = false
 const recWave = $("recWave");
 const rwc = recWave.getContext("2d");
 let rwCols = 0, rwRows = 17, rwHist = null, rwLastPush = 0, rwDpr = 1;
-const RW_PITCH = 7, RW_DOT = 2, RW_STEP_MS = 80;
+const RW_PITCH = 7, RW_DOT = 2, RW_STEP_MS = 40;
 function initRecWave() {
   rwDpr = Math.min(2, window.devicePixelRatio || 1);
   const r = recWave.getBoundingClientRect();
@@ -700,7 +700,12 @@ function drawRecWave(level) {
     const x = c * P + (P - dot) / 2;
     for (let r = 0; r < rwRows; r++) {
       const d = Math.abs(r - mid);
-      rwc.globalAlpha = (d <= lit && amp > 0.03) ? 0.95 : (r === mid ? 0.3 : 0.09);
+      let a;
+      if (amp > 0.03 && d <= lit) a = 0.95;          // тело волны
+      else if (amp > 0.03 && d === lit + 1) a = 0.5; // ореол, слой 1
+      else if (amp > 0.03 && d === lit + 2) a = 0.2; // ореол, слой 2
+      else a = r === mid ? 0.3 : 0.09;               // фон и центральная линия
+      rwc.globalAlpha = a;
       rwc.fillRect(x, r * P + (P - dot) / 2, dot, dot);
     }
   }
