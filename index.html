@@ -13,6 +13,16 @@
 <link rel="icon" href="icon-192.png" />
 <title>GRANULA</title>
 <style>
+  @font-face {
+    font-family: "DM Mono";
+    src: url(dmmono-400.woff2) format("woff2");
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: "DM Mono";
+    src: url(dmmono-500.woff2) format("woff2");
+    font-weight: 500 700; font-style: normal; font-display: swap;
+  }
   :root {
     --yellow: #ffc700;
     --txt: #ffffff;
@@ -23,7 +33,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
   html, body {
     margin: 0; height: 100%; background: #000; color: var(--txt);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, sans-serif;
+    font-family: "DM Mono", Menlo, ui-monospace, monospace;
     overscroll-behavior: none; overflow: hidden;
   }
 
@@ -151,16 +161,42 @@
   }
   #start p { color: var(--dim); font-size: 13px; margin: 0; }
 
-  #recOverlay { background: transparent; pointer-events: none; }
+  /* окно записи: шит, подъезжающий снизу */
+  #recOverlay { position: fixed; inset: 0; z-index: 25; pointer-events: none; }
   #recOverlay.show { pointer-events: auto; }
-  #recTimer {
-    font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.85);
-    letter-spacing: 1px; font-variant-numeric: tabular-nums;
+  #recSheet {
+    position: absolute; inset: 0; background: #050505;
+    border-radius: 28px 28px 0 0;
+    transform: translateY(103%);
+    transition: transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+    display: flex; flex-direction: column; align-items: center;
+    padding-top: calc(env(safe-area-inset-top) + 58px);
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.6);
   }
+  #recOverlay.show #recSheet { transform: translateY(0); }
+  #recHead {
+    font-size: 11px; letter-spacing: 3px; color: #c9c9c9;
+    display: flex; align-items: center; gap: 9px; text-transform: uppercase;
+  }
+  #recDot {
+    width: 6px; height: 6px; border-radius: 50%; background: #ff3b30;
+    animation: blink 1.2s steps(2, start) infinite;
+  }
+  #recClose {
+    position: absolute; top: calc(env(safe-area-inset-top) + 46px); right: 18px;
+    width: 44px; height: 44px; background: none; border: none;
+    color: #8a8a8a; font-size: 22px;
+  }
+  #recTimer {
+    margin-top: 13vh; font-size: 52px; font-weight: 400; color: #fff;
+    letter-spacing: 6px; font-variant-numeric: tabular-nums;
+  }
+  #recWave { margin-top: 11vh; width: 100%; height: 119px; display: block; }
   #stopBtn {
-    position: absolute; bottom: calc(env(safe-area-inset-bottom) + 96px);
-    width: 232px; height: 82px; border: none; border-radius: 20px;
-    background: transparent; color: #fff; font-size: 15px; font-weight: 500;
+    position: absolute; bottom: calc(env(safe-area-inset-bottom) + 56px);
+    width: 132px; height: 42px; border: none; border-radius: 999px;
+    background: #3a0d0d; color: #ff9d9d;
+    font-size: 12px; letter-spacing: 3px; font-family: inherit; text-transform: uppercase;
   }
 
   /* library */
@@ -227,9 +263,14 @@
   <p>коснись, чтобы начать</p>
 </div>
 
-<div class="overlay" id="recOverlay">
-  <span id="recTimer">00:00</span>
-  <button id="stopBtn">Stop</button>
+<div id="recOverlay">
+  <div id="recSheet">
+    <div id="recHead"><span id="recDot"></span>Recording...</div>
+    <button id="recClose" aria-label="cancel">✕</button>
+    <div id="recTimer">00:00</div>
+    <canvas id="recWave"></canvas>
+    <button id="stopBtn">Stop</button>
+  </div>
 </div>
 
 <div class="overlay" id="library">
@@ -625,7 +666,46 @@ function useBuiltin() {
 
 // ================= recording =================
 let mediaRec = null, recChunks = [], recTimerId = null, recStart = 0;
-let isRecording = false, micAnalyser = null, micSrc = null;
+let isRecording = false, micAnalyser = null, micSrc = null, recCancelled = false;
+
+// точечная осциллограмма записи: волна ползёт влево, точки закрашиваются громкостью
+const recWave = $("recWave");
+const rwc = recWave.getContext("2d");
+let rwCols = 0, rwRows = 17, rwHist = null, rwLastPush = 0, rwDpr = 1;
+const RW_PITCH = 7, RW_DOT = 2, RW_STEP_MS = 80;
+function initRecWave() {
+  rwDpr = Math.min(2, window.devicePixelRatio || 1);
+  const r = recWave.getBoundingClientRect();
+  recWave.width = Math.floor(r.width * rwDpr);
+  recWave.height = Math.floor(r.height * rwDpr);
+  rwCols = Math.floor(recWave.width / (RW_PITCH * rwDpr));
+  rwRows = Math.max(9, Math.floor(recWave.height / (RW_PITCH * rwDpr)) | 1); // нечётное — есть центр
+  rwHist = new Float32Array(rwCols);
+  rwLastPush = 0;
+}
+function drawRecWave(level) {
+  if (!rwHist) return;
+  const now = performance.now();
+  if (now - rwLastPush > RW_STEP_MS) {
+    rwHist.copyWithin(0, 1);
+    rwHist[rwCols - 1] = Math.min(1, Math.sqrt(level) * 2.2);
+    rwLastPush = now;
+  }
+  const P = RW_PITCH * rwDpr, dot = RW_DOT * rwDpr, mid = (rwRows / 2) | 0;
+  rwc.clearRect(0, 0, recWave.width, recWave.height);
+  rwc.fillStyle = "#fff";
+  for (let c = 0; c < rwCols; c++) {
+    const amp = rwHist[c];
+    const lit = Math.round(amp * mid);
+    const x = c * P + (P - dot) / 2;
+    for (let r = 0; r < rwRows; r++) {
+      const d = Math.abs(r - mid);
+      rwc.globalAlpha = (d <= lit && amp > 0.03) ? 0.95 : (r === mid ? 0.3 : 0.09);
+      rwc.fillRect(x, r * P + (P - dot) / 2, dot, dot);
+    }
+  }
+  rwc.globalAlpha = 1;
+}
 
 function muteMaster() {
   master.gain.cancelScheduledValues(ctx.currentTime);
@@ -691,6 +771,11 @@ async function startRec() {
     try { await ctx.suspend(); await ctx.resume(); } catch (e) {}
     unmuteMaster();
 
+    if (recCancelled) { // ✕ — закрыть без сохранения
+      if (playing && buffer) startCloud();
+      return;
+    }
+
     const blob = new Blob(recChunks, { type: mediaRec.mimeType || "audio/webm" });
     const name = randomRecName();
     const ok = await useBlob(blob, name, null);
@@ -703,17 +788,22 @@ async function startRec() {
   };
 
   isRecording = true;
+  recCancelled = false;
   mediaRec.start();
   recStart = Date.now();
   setPalette("rec");
+  $("recTimer").textContent = "00:00";
   $("recOverlay").classList.add("show");
+  initRecWave();
   recTimerId = setInterval(() => {
-    const s = (Date.now() - recStart) / 1000;
-    $("recTimer").textContent = "00:" + String(Math.floor(s)).padStart(2, "0");
+    const s = Math.floor((Date.now() - recStart) / 1000);
+    $("recTimer").textContent =
+      String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
     if (s >= MAX_SECONDS) stopRec();
   }, 100);
 }
 function stopRec() { if (mediaRec && mediaRec.state === "recording") mediaRec.stop(); }
+function cancelRec() { recCancelled = true; stopRec(); }
 
 // ================= knobs UI =================
 const knobsEl = $("knobs");
@@ -878,7 +968,7 @@ function initGrid() {
       d.globalAlpha = 0.07 + Math.random() * 0.10;
       d.fillRect(c * CELL + (CELL - s) / 2, r * CELL + (CELL - s) / 2, s, s);
     }
-  fxc.font = `bold ${Math.round(CELL * 0.74)}px Menlo, Consolas, monospace`;
+  fxc.font = `500 ${Math.round(CELL * 0.74)}px "DM Mono", Menlo, Consolas, monospace`;
   fxc.textAlign = "center";
   fxc.textBaseline = "middle";
 }
@@ -890,6 +980,8 @@ function sizeFx() {
 }
 sizeFx();
 window.addEventListener("resize", sizeFx);
+// когда DM Mono догрузится — перевыставить шрифт канваса
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => initGrid());
 
 // цвет = билинейная смесь углов по позиции пальца
 function cornerColor(u, v) {
@@ -982,6 +1074,9 @@ function animate() {
     P.mid.style.transform = tMid; P.mid.style.opacity = oMid;
     P.bot.style.transform = tBot; P.bot.style.opacity = oBot;
   }
+
+  // ---- осциллограмма записи ----
+  if (isRecording) drawRecWave(level);
 
   // ---- ASCII-сетка ----
   // поджиг ячеек под пальцами (цвет — смесь углов по позиции)
@@ -1103,6 +1198,7 @@ $("playBtn").addEventListener("click", () => {
 });
 $("recBtn").addEventListener("click", startRec);
 $("stopBtn").addEventListener("click", stopRec);
+$("recClose").addEventListener("click", cancelRec);
 
 // ================= boot =================
 $("start").addEventListener("click", async () => {

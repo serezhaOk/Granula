@@ -11,6 +11,7 @@ const TYPES = {
   ".json": "application/json",
   ".png": "image/png",
   ".webmanifest": "application/manifest+json",
+  ".woff2": "font/woff2",
 };
 
 http
