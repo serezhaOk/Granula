@@ -674,7 +674,7 @@ let recBusy = false, recStream = null; // защита от двойного с�
 const recWave = $("recWave");
 const rwc = recWave.getContext("2d");
 let rwCols = 0, rwRows = 17, rwMid = 0, rwHist = null, rwLastPush = 0, rwDpr = 1, rwBase = null;
-const RW_PITCH = 7, RW_DOT = 2, RW_STEP_MS = 40;
+const RW_PITCH = 7, RW_DOT = 3, RW_STEP_MS = 27;
 const RW_BAND_HALF = 17; // высота волны: ±17 точек от центра
 
 function initRecWave() {
@@ -684,8 +684,13 @@ function initRecWave() {
   recWave.height = Math.floor(r.height * rwDpr);
   const P = RW_PITCH * rwDpr, dot = RW_DOT * rwDpr;
   rwCols = Math.floor(recWave.width / P);
-  rwRows = Math.floor(recWave.height / P) | 1; // нечётное — есть центр
-  rwMid = (rwRows / 2) | 0;
+  rwRows = Math.floor(recWave.height / P) | 1;
+  // ось волны — ровно посередине между таймером и кнопкой Stop
+  // (rect'ы внутри одного transform, разности корректны даже во время анимации шита)
+  const tB = $("recTimer").getBoundingClientRect().bottom;
+  const sT = $("stopBtn").getBoundingClientRect().top;
+  rwMid = Math.round(((tB + sT) / 2 - r.top) * rwDpr / P);
+  rwMid = Math.max(RW_BAND_HALF + 2, Math.min(rwRows - RW_BAND_HALF - 3, rwMid));
   rwHist = new Float32Array(rwCols);
   rwLastPush = 0;
   // фон-паттерн из точек на весь экран + центральная ось — рендерим один раз
@@ -723,7 +728,8 @@ function drawRecWave(level) {
     // прогрессия поверх дБ-шкалы: тихое — 1-2 точки, громкое заливает столб
     const lit = Math.max(1, Math.round(Math.pow(amp, 1.4) * RW_BAND_HALF));
     const x = c * P + (P - dot) / 2;
-    for (let d = 0; d <= lit + 1; d++) {
+    const dMax = lit >= 2 ? lit + 1 : lit - 1; // одиночная тихая точка — без ореола
+    for (let d = 0; d <= dMax; d++) {
       let a;
       rwc.fillStyle = "#fff";
       if (d < lit) {
