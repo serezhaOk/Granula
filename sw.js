@@ -1,7 +1,7 @@
 // GRANULA service worker — офлайн app shell
 // index.html: network-first (обновления доезжают сразу), офлайн — из кэша.
 // Остальное: cache-first.
-const CACHE = "granula-v3";
+const CACHE = "granula-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const ASSETS = [
   "./icon-180.png",
   "./icon-192.png",
   "./icon-512.png",
+  "./dmmono-300.woff2",
   "./dmmono-400.woff2",
   "./dmmono-500.woff2",
 ];
