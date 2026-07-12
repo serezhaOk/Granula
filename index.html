@@ -522,23 +522,33 @@ function effDensity() {
   return KNOBS.D.value * (1 + 1.2 * c.tr + 0.6 * c.br) * (1 - 0.3 * c.bl);
 }
 
-// ---- транс-гейт (угол Pulse): 16-е на 126 BPM, глубина = сила угла ----
-const GATE_STEP = 60 / 126 / 4;
-let nextGateTime = 0;
+// ---- транс-гейт (угол Pulse): X = интенсивность, Y = скорость (1/2..1/16) ----
+const GATE_BEAT = 60 / 126;                  // четверть на 126 BPM
+const GATE_MULTS = [2, 1, 0.5, 0.25];        // 1/2, 1/4, 1/8, 1/16 (доли четверти)
+let nextGateTime = 0, gateStep = GATE_BEAT;
+// глубина и шаг из позиции морфа в верхне-правом квадранте
+function gateParams() {
+  const rx = Math.max(0, Math.min(1, (morph.x - 0.5) * 2)); // вправо → глубже
+  const uy = Math.max(0, Math.min(1, (0.5 - morph.y) * 2)); // вверх → быстрее
+  const depth = rx * uy > 0.04 ? rx : 0;                    // активен в квадранте
+  const idx = Math.min(3, Math.floor(uy * 4));              // 0..3 → 1/2..1/16
+  return { depth, step: GATE_BEAT * GATE_MULTS[idx] };
+}
 function gateTick() {
   if (!ctx) return;
   if (nextGateTime < ctx.currentTime) nextGateTime = ctx.currentTime;
-  const depth = cornerStrengths().tr;
-  const ahead = ctx.currentTime + 0.18;
+  const ahead = ctx.currentTime + 0.2;
   while (nextGateTime < ahead) {
     const t = nextGateTime;
+    const { depth, step } = gateParams();
+    gateStep = step;
     if (depth > 0.02) {
       dryGate.gain.setTargetAtTime(1, t, 0.006);
-      dryGate.gain.setTargetAtTime(1 - 0.97 * depth, t + GATE_STEP * 0.5, 0.01);
+      dryGate.gain.setTargetAtTime(1 - 0.97 * depth, t + step * 0.5, 0.01);
     } else {
       dryGate.gain.setTargetAtTime(1, t, 0.03);
     }
-    nextGateTime += GATE_STEP;
+    nextGateTime += step;
   }
 }
 
@@ -958,7 +968,8 @@ stage.addEventListener("pointermove", (e) => {
 });
 function releasePointer(e) {
   pointers.delete(e.pointerId);
-  if (!pointers.size) { morph.touching = false; morph.tx = 0.5; morph.ty = 0.5; }
+  // латч: убрав палец, оставляем цель там, где отпустили (не сбрасываем в центр)
+  if (!pointers.size) morph.touching = false;
   else morphFromPointers();
 }
 stage.addEventListener("pointerup", releasePointer);
