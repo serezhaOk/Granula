@@ -1030,9 +1030,13 @@ stage.addEventListener("pointermove", (e) => {
 });
 function releasePointer(e) {
   pointers.delete(e.pointerId);
-  // latch: on finger-up, leave the target where it was released (no snap to center)
-  if (!pointers.size) morph.touching = false;
-  else morphFromPointers();
+  if (!pointers.size) {
+    morph.touching = false;
+    // latch: freeze the target at the current smoothed position so the sound stops
+    // exactly where it was on release — no inertial glide toward the finger's last edge
+    morph.tx = morph.x;
+    morph.ty = morph.y;
+  } else morphFromPointers();
 }
 stage.addEventListener("pointerup", releasePointer);
 stage.addEventListener("pointercancel", releasePointer);
