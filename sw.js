@@ -1,6 +1,6 @@
-// GRANULA service worker — офлайн app shell
-// index.html: network-first (обновления доезжают сразу), офлайн — из кэша.
-// Остальное: cache-first.
+// GRANULA service worker — offline app shell
+// index.html: network-first (updates arrive right away), offline — from cache.
+// Everything else: cache-first.
 const CACHE = "granula-v4";
 const ASSETS = [
   "./",
@@ -33,7 +33,7 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   const sameOrigin = new URL(req.url).origin === location.origin;
 
-  // страница — сначала сеть, кэш как офлайн-фолбэк
+  // page — network first, cache as offline fallback
   if (req.mode === "navigate") {
     e.respondWith(
       fetch(req)
@@ -47,7 +47,7 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // ассеты — сначала кэш
+  // assets — cache first
   e.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -53,7 +53,7 @@
   .bMid { width: 70vmin; height: 90vmin; top: 30%; margin-left: -35vmin; }
   .bBot { width: 85vmin; height: 100vmin; bottom: -30vmin; margin-left: -42.5vmin; }
 
-  /* ember: красный → крем → бирюза */
+  /* ember: red → cream → teal */
   .palette[data-pal="ember"] .bTop { background: radial-gradient(ellipse 50% 50% at 50% 50%,
     rgba(232,64,32,0.95) 0%, rgba(190,42,28,0.55) 35%, rgba(120,20,16,0.18) 60%, transparent 75%); }
   .palette[data-pal="ember"] .bMid { background: radial-gradient(ellipse 50% 50% at 50% 50%,
@@ -61,7 +61,7 @@
   .palette[data-pal="ember"] .bBot { background: radial-gradient(ellipse 50% 50% at 50% 50%,
     rgba(58,124,114,0.85) 0%, rgba(40,92,86,0.4) 45%, transparent 72%); }
 
-  /* orchid: маджента → лиловый → стальной синий */
+  /* orchid: magenta → lilac → steel blue */
   .palette[data-pal="orchid"] .bTop { background: radial-gradient(ellipse 50% 50% at 50% 50%,
     rgba(216,44,180,0.9) 0%, rgba(160,32,140,0.5) 35%, rgba(90,20,80,0.16) 60%, transparent 75%); }
   .palette[data-pal="orchid"] .bMid { background: radial-gradient(ellipse 50% 50% at 50% 50%,
@@ -69,7 +69,7 @@
   .palette[data-pal="orchid"] .bBot { background: radial-gradient(ellipse 50% 50% at 50% 50%,
     rgba(84,124,196,0.85) 0%, rgba(58,88,150,0.4) 45%, transparent 72%); }
 
-  /* nebula: пыльная роза → золото → фиолет снизу */
+  /* nebula: dusty rose → gold → violet below */
   .palette[data-pal="nebula"] .bTop { background: radial-gradient(ellipse 50% 50% at 50% 50%,
     rgba(158,96,96,0.6) 0%, rgba(110,64,70,0.32) 40%, transparent 72%); }
   .palette[data-pal="nebula"] .bMid { background: radial-gradient(ellipse 50% 50% at 50% 50%,
@@ -77,11 +77,11 @@
   .palette[data-pal="nebula"] .bBot { background: radial-gradient(ellipse 50% 50% at 50% 50%,
     rgba(96,74,228,0.95) 0%, rgba(70,52,180,0.5) 45%, transparent 75%); }
 
-  /* горячее пятно под пальцем (kaoss) + канвас частиц */
-  #touchGlow { display: none; } /* заменён ASCII-сеткой */
+  /* hot spot under the finger (kaoss) + particle canvas */
+  #touchGlow { display: none; } /* replaced by the ASCII grid */
   #fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
-  /* rec: розово-фиолетовое свечение */
+  /* rec: pink-violet glow */
   .palette[data-pal="rec"] .bTop { background: radial-gradient(ellipse 50% 50% at 50% 50%,
     rgba(70,20,90,0.8) 0%, rgba(40,10,60,0.4) 45%, transparent 72%); }
   .palette[data-pal="rec"] .bMid { background: radial-gradient(ellipse 50% 50% at 50% 50%,
@@ -170,7 +170,7 @@
     color: rgba(255,255,255,0.55); font-size: 14px; margin: 0; letter-spacing: 0.5px;
   }
 
-  /* окно записи: шит, подъезжающий снизу */
+  /* recording window: sheet sliding up from the bottom */
   #recOverlay { position: fixed; inset: 0; z-index: 25; pointer-events: none; }
   #recOverlay.show { pointer-events: auto; }
   #recSheet {
@@ -288,7 +288,7 @@
   <div id="libSheet">
     <h3>Samples</h3>
     <div id="libList"></div>
-    <label class="librow" id="loadFileRow">Загрузить файл (mp3 / wav)…
+    <label class="librow" id="loadFileRow">Load file (mp3 / wav)…
       <input type="file" id="file" accept=".mp3,.wav,audio/mpeg,audio/wav,audio/x-wav,audio/*" />
     </label>
   </div>
@@ -333,8 +333,8 @@ const HANN = (() => {
 // ================= audio =================
 const MASTER_VOL = 0.85;
 
-// iOS: тип аудиосессии. "playback" звучит даже при беззвучном переключателе,
-// "play-and-record" — во время записи. Без этого на iPhone тишина/тихий динамик.
+// iOS: audio session type. "playback" plays even with the silent switch on,
+// "play-and-record" while recording. Without this, iPhone stays silent/quiet.
 function setSession(type) {
   try { if (navigator.audioSession) navigator.audioSession.type = type; } catch (e) {}
 }
@@ -348,7 +348,7 @@ function initAudio() {
   analyser.fftSize = 512;
   master.connect(analyser).connect(ctx.destination);
 
-  // транс-гейт: режет только сухие зёрна, реверб-облако остаётся непрерывным
+  // trance gate: cuts only the dry grains, the reverb cloud stays continuous
   dryGate = ctx.createGain();
   dryGate.gain.value = 1;
   dryGate.connect(master);
@@ -409,7 +409,7 @@ function trimToMax(buf) {
   return out;
 }
 
-// реверс-копия сэмпла: зёрна задом наперёд звучат «как сон», тональность не меняется
+// reversed copy of the sample: backward grains sound "dreamlike", pitch stays unchanged
 function reverseBuffer(buf) {
   const out = ctx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
   for (let ch = 0; ch < buf.numberOfChannels; ch++) {
@@ -419,7 +419,7 @@ function reverseBuffer(buf) {
   return out;
 }
 
-// только усиливаем тихое (записи с микрофона), громкое не трогаем
+// only boosts quiet audio (mic recordings), leaves loud audio untouched
 function normalizeBuffer(buf, target = 0.85) {
   let peak = 0;
   for (let ch = 0; ch < buf.numberOfChannels; ch++) {
@@ -457,18 +457,18 @@ function scheduleGrain(when) {
   const c = cornerStrengths();
   const S = KNOBS.S.value;
 
-  // Halo (TL): без транспонирования всего звука — вероятностные октавные
-  // блёстки, мелкие зёрна, реверс-зёрна, много шиммера. Гармония, не сдвиг.
-  // Tide (BL): «прилив» — длинные зёрна, позиция медленно плывёт по сэмплу,
-  // хорус-детюн ±30 центов, редкие суб-октавы.
-  // Chaos (BR): случайные, но гармоничные интервалы, взвешены к тонике.
+  // Halo (TL): no pitch shift on the whole sound — probabilistic octave
+  // sparkles, small grains, reverse grains, lots of shimmer. Harmony, not a shift.
+  // Tide (BL): "tide" — long grains, position slowly drifts across the sample,
+  // ±30 cent chorus detune, occasional sub-octaves.
+  // Chaos (BR): random but harmonic intervals, weighted toward the tonic.
   let sizeMs = KNOBS.G.value * (1 - 0.4 * c.tl) * (1 + 1.8 * c.bl);
   const HARMONY = [0, 0, 0, 7, -7, 12, -12, 5, -5];
   let pitch = 0;
   if (Math.random() < c.tl * 0.5) pitch += Math.random() < 0.7 ? 12 : 7;
   if (Math.random() < c.bl * 0.25) pitch -= 12;
   if (Math.random() < c.br) pitch += HARMONY[(Math.random() * HARMONY.length) | 0];
-  pitch += (Math.random() - 0.5) * 0.6 * c.bl; // хорус-тепло, не фальшь
+  pitch += (Math.random() - 0.5) * 0.6 * c.bl; // chorus warmth, not out of tune
   const reverse = !!revBuf && Math.random() < (0.12 + 0.5 * c.tl + 0.25 * c.bl);
   const sprayMs = 20 + 260 * S + 350 * c.br;
   const panAmt = 0.25 + 0.75 * S;
@@ -518,19 +518,19 @@ function spawnVoice(when, startSec, dur, rate, panAmt, peak, sendAmt, wetOnly, r
 
 function effDensity() {
   const c = cornerStrengths();
-  // Tide: меньше зёрен, но длиннее — глубокая волна, не каша
+  // Tide: fewer grains but longer — a deep wave, not a wash
   return KNOBS.D.value * (1 + 1.2 * c.tr + 0.6 * c.br) * (1 - 0.3 * c.bl);
 }
 
-// ---- транс-гейт (угол Pulse): X = интенсивность, Y = скорость (1/2..1/16) ----
-const GATE_BEAT = 60 / 126;                  // четверть на 126 BPM
-const GATE_MULTS = [2, 1, 0.5, 0.25];        // 1/2, 1/4, 1/8, 1/16 (доли четверти)
+// ---- trance gate (Pulse corner): X = intensity, Y = speed (1/2..1/16) ----
+const GATE_BEAT = 60 / 126;                  // quarter note at 126 BPM
+const GATE_MULTS = [2, 1, 0.5, 0.25];        // 1/2, 1/4, 1/8, 1/16 (fractions of a quarter)
 let nextGateTime = 0, gateStep = GATE_BEAT;
-// глубина и шаг из позиции морфа в верхне-правом квадранте
+// depth and step from the morph position in the top-right quadrant
 function gateParams() {
-  const rx = Math.max(0, Math.min(1, (morph.x - 0.5) * 2)); // вправо → глубже
-  const uy = Math.max(0, Math.min(1, (0.5 - morph.y) * 2)); // вверх → быстрее
-  const depth = rx * uy > 0.04 ? rx : 0;                    // активен в квадранте
+  const rx = Math.max(0, Math.min(1, (morph.x - 0.5) * 2)); // right → deeper
+  const uy = Math.max(0, Math.min(1, (0.5 - morph.y) * 2)); // up → faster
+  const depth = rx * uy > 0.04 ? rx : 0;                    // active within the quadrant
   const idx = Math.min(3, Math.floor(uy * 4));              // 0..3 → 1/2..1/16
   return { depth, step: GATE_BEAT * GATE_MULTS[idx] };
 }
@@ -595,7 +595,7 @@ const dbAll = () => idb("readonly", s => s.getAll());
 const dbGet = (id) => idb("readonly", s => s.get(id));
 const dbDel = (id) => idb("readwrite", s => s.delete(id));
 
-// ================= имена записей: флора и фауна =================
+// ================= recording names: flora and fauna =================
 const NAME_SINGLES = ("Mycelium Nightjar Sphagnum Bryophyte Chanterelle Murmuration Foxglove Mandrake Nightshade " +
   "Wolfsbane Yarrow Vervain Mugwort Tansy Betony Amanita Morel Puffball Inkcap Waxwing Redstart Dunnock " +
   "Goshawk Merlin Kestrel Kite Shrike Corncrake Bittern Godwit Whimbrel Dotterel Wheatear Stonechat " +
@@ -635,7 +635,7 @@ function randomRecName() {
   try { used = new Set(JSON.parse(localStorage.getItem("granula-used-names") || "[]")); }
   catch (e) { used = new Set(); }
   let candidates = namePool.filter(n => !used.has(n));
-  if (!candidates.length) { used.clear(); candidates = namePool; } // пул исчерпан — повторы снова допустимы
+  if (!candidates.length) { used.clear(); candidates = namePool; } // pool exhausted — repeats allowed again
   const name = candidates[(Math.random() * candidates.length) | 0];
   used.add(name);
   try { localStorage.setItem("granula-used-names", JSON.stringify([...used])); } catch (e) {}
@@ -661,41 +661,41 @@ async function useBlob(blob, name, id) {
     if (playing) startCloud();
     return true;
   } catch (e) {
-    toast("не смог открыть: " + (e && (e.message || e.name) || "формат?"));
+    toast("couldn't open: " + (e && (e.message || e.name) || "unsupported format?"));
     return false;
   }
 }
 
 async function loadFile(file) {
-  toast("загружаю…", 1200);
+  toast("loading…", 1200);
   const blob = new Blob([await file.arrayBuffer()], { type: file.type });
   const ok = await useBlob(blob, file.name, null);
   if (!ok) return;
   try {
     const id = await dbAdd({ name: file.name, blob, duration: buffer.duration, ts: Date.now() });
     currentId = id; localStorage.setItem("granula-last", id);
-  } catch (e) { /* storage full — играем без сохранения */ }
+  } catch (e) { /* storage full — plays without saving */ }
   hideLibrary(); renderLibrary();
 }
 
 function useBuiltin() {
   buffer = genPad();
   revBuf = reverseBuffer(buffer);
-  setCurrent("Pad · встроенный", null);
+  setCurrent("Pad · built-in", null);
   if (playing) startCloud();
 }
 
 // ================= recording =================
 let mediaRec = null, recChunks = [], recTimerId = null, recStart = 0;
 let isRecording = false, micAnalyser = null, micSrc = null, recCancelled = false;
-let recBusy = false, recStream = null; // защита от двойного старта + ссылка на стрим, чтобы микрофон никогда не «зависал»
+let recBusy = false, recStream = null; // re-entrancy guard + stream ref so the mic never "hangs"
 
-// точечная осциллограмма записи: волна ползёт влево, точки закрашиваются громкостью
+// dot-matrix recording waveform: the wave scrolls left, dots light up with loudness
 const recWave = $("recWave");
 const rwc = recWave.getContext("2d");
 let rwCols = 0, rwRows = 17, rwMid = 0, rwHist = null, rwLastPush = 0, rwDpr = 1, rwBase = null;
 const RW_PITCH = 14, RW_DOT = 3, RW_STEP_MS = 54;
-const RW_BAND_HALF = 9; // высота волны: ±9 точек (шаг вдвое шире, пиксельная высота та же)
+const RW_BAND_HALF = 9; // wave height: ±9 dots (spacing doubled, pixel height unchanged)
 
 function initRecWave() {
   rwDpr = Math.min(2, window.devicePixelRatio || 1);
@@ -705,15 +705,15 @@ function initRecWave() {
   const P = RW_PITCH * rwDpr, dot = RW_DOT * rwDpr;
   rwCols = Math.floor(recWave.width / P);
   rwRows = Math.floor(recWave.height / P) | 1;
-  // ось волны — ровно посередине между таймером и кнопкой Stop
-  // (rect'ы внутри одного transform, разности корректны даже во время анимации шита)
+  // wave axis — exactly midway between the timer and the Stop button
+  // (rects are within the same transform, so differences hold even mid-sheet-animation)
   const tB = $("recTimer").getBoundingClientRect().bottom;
   const sT = $("stopBtn").getBoundingClientRect().top;
   rwMid = Math.round(((tB + sT) / 2 - r.top) * rwDpr / P);
   rwMid = Math.max(RW_BAND_HALF + 2, Math.min(rwRows - RW_BAND_HALF - 3, rwMid));
   rwHist = new Float32Array(rwCols);
   rwLastPush = 0;
-  // фон-паттерн из точек на весь экран + центральная ось — рендерим один раз
+  // full-screen dot background pattern + center axis — rendered once
   rwBase = document.createElement("canvas");
   rwBase.width = recWave.width; rwBase.height = recWave.height;
   const b = rwBase.getContext("2d");
@@ -731,35 +731,35 @@ function drawRecWave(level) {
   const now = performance.now();
   if (now - rwLastPush > RW_STEP_MS) {
     rwHist.copyWithin(0, 1);
-    // децибельная шкала (как VU-метр): −48дБ тишина … −6дБ громко.
-    // линейный RMS у микрофона iPhone крошечный даже для громкого голоса,
-    // поэтому линейная шкала прижимала волну к оси
+    // decibel scale (VU-meter style): −48dB silence … −6dB loud.
+    // the iPhone mic's linear RMS is tiny even for a loud voice,
+    // so a linear scale used to pin the wave to the axis
     const db = 20 * Math.log10(Math.max(level, 0.0001));
     rwHist[rwCols - 1] = Math.min(1, Math.max(0, (db + 48) / 42));
     rwLastPush = now;
   }
   const P = RW_PITCH * rwDpr, dot = RW_DOT * rwDpr;
-  const tb = (now / 130) | 0; // тайм-бакет: вспышка живёт ~130мс, а не один кадр
+  const tb = (now / 130) | 0; // time bucket: a flash lasts ~130ms, not just one frame
   rwc.clearRect(0, 0, recWave.width, recWave.height);
   if (rwBase) rwc.drawImage(rwBase, 0, 0);
   for (let c = 0; c < rwCols; c++) {
     const amp = rwHist[c];
     if (amp <= 0.02) continue;
-    // прогрессия поверх дБ-шкалы: тихое — 1-2 точки, громкое заливает столб
+    // progression on top of the dB scale: quiet — 1-2 dots, loud fills the column
     const lit = Math.max(1, Math.round(Math.pow(amp, 1.4) * RW_BAND_HALF));
     const x = c * P + (P - dot) / 2;
-    const dMax = lit >= 2 ? lit + 1 : lit - 1; // одиночная тихая точка — без ореола
+    const dMax = lit >= 2 ? lit + 1 : lit - 1; // a single quiet dot — no halo
     for (let d = 0; d <= dMax; d++) {
       let a;
       rwc.fillStyle = "#fff";
       if (d < lit) {
         a = 0.95;
-        // детерминированное «мигание» ячейки в голубой на время бакета
+        // deterministic "flicker" of a cell into blue for the duration of the bucket
         if ((((c * 73856093) ^ (d * 19349663) ^ (tb * 83492791)) >>> 0) % 14 === 0) {
           rwc.fillStyle = "#4fc3ff"; a = 1;
         }
-      } else if (d === lit) a = 0.5; // ореол
-      else a = 0.2;                  // ореол, слой 2
+      } else if (d === lit) a = 0.5; // halo
+      else a = 0.2;                  // halo, layer 2
       rwc.globalAlpha = a;
       rwc.fillRect(x, (rwMid - d) * P + (P - dot) / 2, dot, dot);
       if (d) rwc.fillRect(x, (rwMid + d) * P + (P - dot) / 2, dot, dot);
@@ -778,17 +778,17 @@ function unmuteMaster() {
 }
 
 async function startRec() {
-  // guard ставим ДО первого await: двойной тап по REC раньше запускал две записи,
-  // второй стрим перетирал первый — осиротевший микрофон висел вечно и глушил динамик
+  // guard set BEFORE the first await: a double-tap on REC used to start two recordings,
+  // the second stream would clobber the first — the orphaned mic stayed open forever and muted the speaker
   if (recBusy || isRecording) return;
   recBusy = true;
   if (recStream) { try { recStream.getTracks().forEach(t => t.stop()); } catch (e) {} recStream = null; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    toast("микрофон требует https"); recBusy = false; return;
+    toast("microphone requires https"); recBusy = false; return;
   }
 
-  // глушим ВСЁ до запроса микрофона: и облако, и хвост реверба,
-  // иначе динамик орёт в микрофон, пока висит диалог разрешения
+  // mute EVERYTHING before requesting the mic: the cloud and the reverb tail too,
+  // otherwise the speaker blasts into the mic while the permission dialog is up
   stopCloud();
   muteMaster();
   setSession("play-and-record");
@@ -801,7 +801,7 @@ async function startRec() {
   } catch (e) {
     setSession("playback"); unmuteMaster();
     if (playing) startCloud();
-    toast("нет доступа к микрофону"); recBusy = false; return;
+    toast("no access to the microphone"); recBusy = false; return;
   }
   recStream = stream;
   recChunks = [];
@@ -811,15 +811,15 @@ async function startRec() {
     recStream = null;
     setSession("playback"); unmuteMaster();
     if (playing) startCloud();
-    toast("запись не поддерживается"); recBusy = false; return;
+    toast("recording not supported"); recBusy = false; return;
   }
 
-  // пламя реагирует на микрофон во время записи
+  // the flame reacts to the microphone while recording
   try {
     micSrc = ctx.createMediaStreamSource(stream);
     micAnalyser = ctx.createAnalyser();
     micAnalyser.fftSize = 512;
-    micSrc.connect(micAnalyser); // в destination НЕ подключаем — иначе завязка
+    micSrc.connect(micAnalyser); // NOT connected to destination — would cause feedback
   } catch (e) { micAnalyser = null; }
 
   mediaRec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
@@ -834,13 +834,13 @@ async function startRec() {
     setPalette(samplePal);
     $("recOverlay").classList.remove("show");
 
-    // возвращаем громкий динамик: сессия playback + пинок контексту
-    // (iOS иначе оставляет тихий разговорный динамик после записи)
+    // restore the loud speaker: playback session + a nudge to the context
+    // (otherwise iOS leaves the quiet earpiece speaker on after recording)
     setSession("playback");
     try { await ctx.suspend(); await ctx.resume(); } catch (e) {}
     unmuteMaster();
 
-    if (recCancelled) { // ✕ — закрыть без сохранения
+    if (recCancelled) { // ✕ — close without saving
       if (playing && buffer) startCloud();
       return;
     }
@@ -968,7 +968,7 @@ stage.addEventListener("pointermove", (e) => {
 });
 function releasePointer(e) {
   pointers.delete(e.pointerId);
-  // латч: убрав палец, оставляем цель там, где отпустили (не сбрасываем в центр)
+  // latch: on finger-up, leave the target where it was released (no snap to center)
   if (!pointers.size) morph.touching = false;
   else morphFromPointers();
 }
@@ -976,7 +976,7 @@ stage.addEventListener("pointerup", releasePointer);
 stage.addEventListener("pointercancel", releasePointer);
 
 // ================= visuals =================
-// палитры: у каждого сэмпла своя, кроссфейд медленный
+// palettes: each sample gets its own, slow crossfade
 const PALETTES = ["ember", "orchid", "nebula"];
 const palEls = {};
 document.querySelectorAll(".palette").forEach(el => {
@@ -986,7 +986,7 @@ document.querySelectorAll(".palette").forEach(el => {
   };
 });
 let activePal = "ember", samplePal = "ember";
-const SHOW_FLAME = false; // фон-градиент временно выключен (вернуть: true)
+const SHOW_FLAME = false; // background gradient temporarily disabled (restore: true)
 
 function paletteFor(name) {
   let h = 0;
@@ -995,22 +995,22 @@ function paletteFor(name) {
 }
 function setPalette(p) { activePal = p; }
 
-// медленное визуальное состояние: фон эволюционирует за пальцем с большой инерцией
+// slow visual state: the background evolves following the finger with heavy inertia
 const vis = { x: 0.5, y: 0.5 };
 const levelArr = new Uint8Array(256);
 const freqArr = new Uint8Array(256);
 let slowLevel = 0, t0 = performance.now();
 
-// ---- спектр: полосы (питают пламя, когда включено) ----
+// ---- spectrum: bands (feed the flame, when enabled) ----
 let bBass = 0, bMid = 0, bHigh = 0;
 
-// ---- ASCII-частицы (стиль Cogmind): поле точек, вспышки глифов под пальцем ----
+// ---- ASCII particles (Cogmind style): dot field, glyph flashes under the finger ----
 const fx = document.getElementById("fx");
 const fxc = fx.getContext("2d");
 let fxW = 0, fxH = 0, fxDpr = 1;
 
 const GLYPHS = ".:;+*=!?/\\|<>[]{}()#%&$~^',";
-// цвета углов: Halo голубой, Pulse маджента, Tide зелёный, Chaos оранжевый
+// corner colors: Halo blue, Pulse magenta, Tide green, Chaos orange
 const CORNER_RGB = {
   tl: [90, 200, 255], tr: [255, 80, 200],
   bl: [90, 230, 120], br: [255, 145, 50],
@@ -1027,7 +1027,7 @@ function initGrid() {
   gInt = new Float32Array(n);
   gGlyph = new Uint8Array(n);
   gCol = new Array(n).fill("");
-  // фоновое поле тусклых точек — рисуем один раз в офскрин
+  // dim dot background field — drawn once to an offscreen canvas
   dotsLayer = document.createElement("canvas");
   dotsLayer.width = fxW; dotsLayer.height = fxH;
   const d = dotsLayer.getContext("2d");
@@ -1050,10 +1050,10 @@ function sizeFx() {
 }
 sizeFx();
 window.addEventListener("resize", sizeFx);
-// когда DM Mono догрузится — перевыставить шрифт канваса
+// once DM Mono finishes loading — re-set the canvas font
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => initGrid());
 
-// цвет = билинейная смесь углов по позиции пальца
+// color = bilinear blend of the corners by finger position
 function cornerColor(u, v) {
   const w = { tl: (1 - u) * (1 - v), tr: u * (1 - v), bl: (1 - u) * v, br: u * v };
   let r = 0, g = 0, b = 0;
@@ -1065,8 +1065,8 @@ function cornerColor(u, v) {
   return [r, g, b];
 }
 
-// экранные углы для подсветки латча: [xFrac, yFrac, u, v] (u,v → чистый цвет угла)
-// небольшой отступ от края — кластер садится у метки угла, а не за кнопками
+// screen corners for the latch highlight: [xFrac, yFrac, u, v] (u,v → pure corner color)
+// small inset from the edge — the cluster sits by the corner label, not behind the buttons
 const CORNER_POS = {
   tl: [0.05, 0.07, 0, 0], tr: [0.95, 0.07, 1, 0],
   bl: [0.05, 0.93, 0, 1], br: [0.95, 0.93, 1, 1],
@@ -1082,12 +1082,12 @@ function ignite(pxCss, pyCss, strength, u, v) {
       if (x < 0 || y < 0 || x >= gCols || y >= gRows) continue;
       const d2 = dx * dx + dy * dy;
       if (d2 > 11) continue;
-      if (d2 > 6 && Math.random() < 0.45) continue; // рваный внешний край
+      if (d2 > 6 && Math.random() < 0.45) continue; // ragged outer edge
       const f = strength * Math.max(0, 1 - Math.sqrt(d2) / 3.2);
       const i = y * gCols + x;
       if (f > gInt[i]) {
         gInt[i] = Math.min(1, f);
-        const j = 0.8 + Math.random() * 0.45; // разброс яркости соседей
+        const j = 0.8 + Math.random() * 0.45; // brightness variance between neighbors
         gCol[i] = `rgb(${Math.min(255, base[0] * j) | 0},${Math.min(255, base[1] * j) | 0},${Math.min(255, base[2] * j) | 0})`;
         gGlyph[i] = (Math.random() * GLYPHS.length) | 0;
       }
@@ -1096,16 +1096,16 @@ function ignite(pxCss, pyCss, strength, u, v) {
 }
 
 function animate() {
-  // ease morph (звук реагирует быстрее, чем фон)
+  // ease morph (sound reacts faster than the background)
   const k = morph.touching ? 0.16 : 0.03;
   morph.x += (morph.tx - morph.x) * k;
   morph.y += (morph.ty - morph.y) * k;
 
-  // фон догоняет очень медленно — эмбиент
+  // the background catches up very slowly — ambient feel
   vis.x += (morph.x - vis.x) * 0.006;
   vis.y += (morph.y - vis.y) * 0.006;
 
-  // audio level (сглаженный); при записи — уровень с микрофона
+  // audio level (smoothed); while recording — level from the microphone
   let level = 0, peakAmp = 0;
   const an = (isRecording && micAnalyser) ? micAnalyser : analyser;
   if (an) {
@@ -1119,7 +1119,7 @@ function animate() {
     }
     level = Math.sqrt(sum / levelArr.length);
 
-    // спектр: полосы питают блобы пламени (когда SHOW_FLAME)
+    // spectrum: bands feed the flame blobs (when SHOW_FLAME)
     an.getByteFrequencyData(freqArr);
     let s1 = 0, s2 = 0, s3 = 0;
     for (let i = 1; i < 6; i++) s1 += freqArr[i];
@@ -1132,7 +1132,7 @@ function animate() {
   slowLevel += (level - slowLevel) * 0.08;
 
   const t = (performance.now() - t0) / 1000;
-  const breathe = 0.04 * Math.sin(t * 0.35) + 0.03 * Math.sin(t * 0.21 + 1.7); // медленное дыхание
+  const breathe = 0.04 * Math.sin(t * 0.35) + 0.03 * Math.sin(t * 0.21 + 1.7); // slow breathing
   const dx = (vis.x - 0.5) * 22;
   const dy = (vis.y - 0.5) * 10;
   const pulse = 1 + slowLevel * 1.3 + breathe;
@@ -1140,14 +1140,14 @@ function animate() {
   const tTop = `translate(${dx}vmin, ${dy * 0.6}vmin) scale(${0.92 + slowLevel * 1.0 + 0.3 * (1 - vis.y) + breathe})`;
   const tMid = `translate(${dx * 1.4}vmin, ${dy}vmin) scaleY(${pulse}) scaleX(${0.9 + slowLevel * 0.8 + breathe})`;
   const tBot = `translate(${dx * 0.7}vmin, ${-dy * 0.8}vmin) scale(${0.95 + slowLevel * 0.7 + 0.35 * vis.y - breathe})`;
-  // полосы спектра дышат в блобы: низы — вниз, верха — вверх
+  // spectrum bands breathe into the blobs: lows below, highs above
   const oTop = (0.45 + slowLevel * 0.55 + 0.15 * (1 - vis.y)) * (0.55 + 0.85 * bHigh);
   const oMid = (0.35 + slowLevel * 0.8) * (0.55 + 0.85 * bMid);
   const oBot = (0.45 + slowLevel * 0.55 + 0.2 * vis.y) * (0.55 + 0.85 * bBass);
 
   for (const name in palEls) {
     const P = palEls[name];
-    // кроссфейд палитр — медленный, ~3-4 секунды
+    // palette crossfade — slow, ~3-4 seconds
     const target = SHOW_FLAME && name === activePal ? 1 : 0;
     P.op += (target - P.op) * 0.012;
     P.el.style.opacity = P.op.toFixed(3);
@@ -1157,15 +1157,15 @@ function animate() {
     P.bot.style.transform = tBot; P.bot.style.opacity = oBot;
   }
 
-  // ---- осциллограмма записи ----
+  // ---- recording waveform ----
   if (isRecording) drawRecWave(peakAmp);
 
-  // ---- ASCII-сетка ----
-  // поджиг ячеек под пальцами (цвет — смесь углов по позиции)
+  // ---- ASCII grid ----
+  // ignite cells under the fingers (color — corner blend by position)
   if (pointers.size && buffer) {
     pointers.forEach(p => ignite(p.px, p.py, 0.85 + level * 0.4, p.x, p.y));
   } else if (buffer) {
-    // залоченный угол: палец убран, а морф уведён к углу — тлеет и дышит
+    // latched corner: finger lifted, morph held toward a corner — glows and breathes
     const cs = cornerStrengths();
     const puls = 0.8 + 0.2 * Math.sin(performance.now() / 430);
     for (const k in CORNER_POS) {
@@ -1176,16 +1176,16 @@ function animate() {
   }
   fxc.clearRect(0, 0, fxW, fxH);
   if (dotsLayer) fxc.drawImage(dotsLayer, 0, 0);
-  const flick = 0.2 + level * 0.45; // звук ускоряет перебор символов
+  const flick = 0.2 + level * 0.45; // sound speeds up the glyph cycling
   for (let i = 0; i < gInt.length; i++) {
     const val = gInt[i];
     if (val < 0.02) { if (val !== 0) gInt[i] = 0; continue; }
-    gInt[i] = val * 0.75; // хвост затухания
+    gInt[i] = val * 0.75; // decay tail
     const x = (i % gCols) * CELL, y = ((i / gCols) | 0) * CELL;
     if (Math.random() < flick) gGlyph[i] = (Math.random() * GLYPHS.length) | 0;
     fxc.fillStyle = gCol[i];
     if (val > 0.78) {
-      // ядро — плотная заливка, поверх иногда тёмный глиф (как в референсе)
+      // core — solid fill, sometimes a dark glyph on top (like the reference)
       fxc.globalAlpha = val;
       fxc.fillRect(x + CELL * 0.06, y + CELL * 0.06, CELL * 0.88, CELL * 0.88);
       if (gGlyph[i] & 1) {
@@ -1194,7 +1194,7 @@ function animate() {
         fxc.fillText(GLYPHS[gGlyph[i]], x + CELL / 2, y + CELL / 2 + 1);
       }
     } else {
-      // ореол: полупрозрачная заливка на всех ячейках кластера — радиус нажатия виден
+      // halo: translucent fill on every cluster cell — the press radius is visible
       fxc.globalAlpha = 0.12 + val * 0.5;
       fxc.fillRect(x + CELL * 0.06, y + CELL * 0.06, CELL * 0.88, CELL * 0.88);
       fxc.globalAlpha = Math.min(1, val * 1.35);
@@ -1215,7 +1215,7 @@ async function renderLibrary() {
 
   const builtin = document.createElement("div");
   builtin.className = "librow" + (currentId === null && currentName.startsWith("Pad") ? " current" : "");
-  builtin.innerHTML = `<span class="nm">Pad · встроенный</span><span class="dur">5.0s</span>`;
+  builtin.innerHTML = `<span class="nm">Pad · built-in</span><span class="dur">5.0s</span>`;
   builtin.addEventListener("click", () => { useBuiltin(); hideLibrary(); renderLibrary(); });
   list.appendChild(builtin);
 
@@ -1242,7 +1242,7 @@ async function renderLibrary() {
   }
 }
 
-// инлайн-переименование: ✎ → инпут, Enter/блюр — сохранить в IndexedDB
+// inline rename: ✎ → input, Enter/blur — save to IndexedDB
 function startRename(rowEl, r) {
   const nm = rowEl.querySelector(".nm");
   const input = document.createElement("input");
@@ -1291,16 +1291,16 @@ $("recBtn").addEventListener("click", startRec);
 $("stopBtn").addEventListener("click", stopRec);
 $("recClose").addEventListener("click", cancelRec);
 
-// ================= стартовый экран: пиксельное сияние =================
-// «сири»-свечение по краям из цветов углов пэда, точки в общем стиле
+// ================= start screen: pixel glow =================
+// "siri"-style edge glow from the pad corner colors, dots in the shared style
 const startFx = $("startFx");
 const sctx = startFx.getContext("2d");
 let startRaf = null;
-const START_COLORS = [ // только холодные: синий → циан → фиолет → маджента
-  [90, 200, 255],  // синий (Halo)
-  [80, 220, 230],  // циан
-  [150, 90, 255],  // фиолет
-  [255, 80, 200],  // маджента (Pulse)
+const START_COLORS = [ // cool only: blue → cyan → violet → magenta
+  [90, 200, 255],  // blue (Halo)
+  [80, 220, 230],  // cyan
+  [150, 90, 255],  // violet
+  [255, 80, 200],  // magenta (Pulse)
 ];
 
 function startGlow() {
@@ -1310,7 +1310,7 @@ function startGlow() {
   const H = startFx.height = Math.floor(innerHeight * dpr);
   const P = 14 * dpr, dot = 3 * dpr;
   const cols = Math.ceil(W / P), rows = Math.ceil(H / P);
-  const DEPTH = 8; // максимальная глубина свечения в ячейках от края
+  const DEPTH = 8; // max glow depth in cells from the edge
   const TAU = Math.PI * 2;
   const cells = [];
   for (let r = 0; r < rows; r++) {
@@ -1321,7 +1321,7 @@ function startGlow() {
       cells.push({
         cx: c * P + P / 2,
         cy: r * P + P / 2,
-        d, u: ang / TAU + 0.5, // 0..1 вокруг центра
+        d, u: ang / TAU + 0.5, // 0..1 around the center
         jit: Math.random() * TAU,
       });
     }
@@ -1331,22 +1331,22 @@ function startGlow() {
     const t = (performance.now() - t0) / 1000;
     sctx.clearRect(0, 0, W, H);
     for (const cell of cells) {
-      // «эквалайзер» по периметру: глубина свечения в этой точке рамки —
-      // сумма трёх несинхронных волн, бегущих вдоль края с разными скоростями
+      // "equalizer" around the perimeter: the glow depth at this frame point —
+      // sum of three out-of-sync waves running along the edge at different speeds
       const u = cell.u;
       const wave =
         0.45 * Math.sin(u * TAU * 3 + t * 3.15) +
         0.35 * Math.sin(u * TAU * 7 - t * 4.8) +
         0.20 * Math.sin(u * TAU * 13 + t * 6.9);
-      const hDepth = DEPTH * (0.12 + 0.5 * (0.5 + 0.5 * wave)); // ~1..5 ячеек — ближе к краю
+      const hDepth = DEPTH * (0.12 + 0.5 * (0.5 + 0.5 * wave)); // ~1..5 cells — closer to the edge
       const inten = Math.max(0, 1 - cell.d / hDepth);
       if (inten <= 0.01) continue;
       const pulse = Math.pow(inten, 1.7) * (0.72 + 0.28 * Math.sin(t * 5.1 + cell.jit));
-      // цвета плывут по периметру
+      // colors drift around the perimeter
       const seg = ((u - 0.125 + t * 0.09) % 1 + 1) % 1 * 4;
       const i0 = seg | 0, f = seg - i0;
       const A = START_COLORS[i0], B = START_COLORS[(i0 + 1) % 4];
-      const s = dot * (1 + 1.3 * pulse); // размер следует за интенсивностью
+      const s = dot * (1 + 1.3 * pulse); // size follows intensity
       sctx.globalAlpha = Math.min(1, pulse * 1.15);
       sctx.fillStyle = `rgb(${(A[0] + (B[0] - A[0]) * f) | 0},${(A[1] + (B[1] - A[1]) * f) | 0},${(A[2] + (B[2] - A[2]) * f) | 0})`;
       sctx.fillRect(cell.cx - s / 2, cell.cy - s / 2, s, s);
@@ -1362,8 +1362,8 @@ startGlow();
 $("start").addEventListener("click", async () => {
   cancelAnimationFrame(startRaf);
   initAudio();
-  // не ждём resume: если ОС тянет с активацией аудио, UI всё равно строим,
-  // звук поднимет страховочный pointerdown-обработчик
+  // don't await resume: if the OS stalls on audio activation, still build the UI,
+  // the fallback pointerdown handler will bring the sound up
   ctx.resume().catch(() => {});
   setInterval(gateTick, 25);
   restoreKnobs();
@@ -1382,12 +1382,12 @@ $("start").addEventListener("click", async () => {
   animate();
 }, { once: true });
 
-// страховка: если ОС подвесила аудиоконтекст (звонок, сворачивание) — будим тапом
+// safety net: if the OS suspended the audio context (call, backgrounding) — wake it on tap
 document.addEventListener("pointerdown", () => {
   if (ctx && ctx.state === "suspended" && !isRecording) ctx.resume();
 });
 
-// PWA: регистрация service worker (нужен https или localhost)
+// PWA: service worker registration (requires https or localhost)
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch(() => {});

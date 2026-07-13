@@ -1,4 +1,4 @@
-// Генератор иконок GRANULA — рисует ember-градиент и пишет PNG без зависимостей.
+// GRANULA icon generator — draws the ember gradient and writes PNG with no dependencies.
 const fs = require("fs");
 const zlib = require("zlib");
 const path = require("path");
@@ -30,7 +30,7 @@ function chunk(type, data) {
 function lerp(a, b, t) { return a + (b - a) * t; }
 function smooth(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
 
-// плавная интерполяция по массиву стопов [{p, c:[r,g,b]}]
+// smooth interpolation over an array of stops [{p, c:[r,g,b]}]
 function gradient(stops, y) {
   if (y <= stops[0].p) return stops[0].c;
   for (let i = 1; i < stops.length; i++) {
@@ -45,18 +45,18 @@ function gradient(stops, y) {
 
 const STOPS = [
   { p: 0.00, c: [8, 7, 10] },
-  { p: 0.26, c: [232, 64, 32] },   // красный
-  { p: 0.44, c: [242, 202, 180] }, // кремовый горячий кор
-  { p: 0.66, c: [58, 124, 114] },  // бирюза
+  { p: 0.26, c: [232, 64, 32] },   // red
+  { p: 0.44, c: [242, 202, 180] }, // hot cream core
+  { p: 0.66, c: [58, 124, 114] },  // teal
   { p: 1.00, c: [10, 16, 18] },
 ];
 
-// вертикальное «пламя» + мягкая горизонтальная виньетка
+// vertical "flame" + soft horizontal vignette
 function color(nx, ny) {
   const base = gradient(STOPS, ny);
   const black = [6, 5, 8];
-  // свечение сильнее по центру колонны, спадает к краям по X
-  const edge = Math.abs(nx - 0.5) * 2;          // 0 в центре .. 1 у края
+  // glow is strongest along the column center, falls off toward the X edges
+  const edge = Math.abs(nx - 0.5) * 2;          // 0 at center .. 1 at edge
   const column = Math.pow(1 - smooth(edge * 0.9), 1.2);
   const g = Math.max(0, Math.min(1, column));
   return [

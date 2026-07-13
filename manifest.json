@@ -1,7 +1,7 @@
 {
   "name": "GRANULA",
   "short_name": "GRANULA",
-  "description": "Гранулярный эмбиент-синтезатор",
+  "description": "Granular ambient synthesizer",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
