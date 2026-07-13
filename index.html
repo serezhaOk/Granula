@@ -1065,6 +1065,13 @@ function cornerColor(u, v) {
   return [r, g, b];
 }
 
+// экранные углы для подсветки латча: [xFrac, yFrac, u, v] (u,v → чистый цвет угла)
+// небольшой отступ от края — кластер садится у метки угла, а не за кнопками
+const CORNER_POS = {
+  tl: [0.05, 0.07, 0, 0], tr: [0.95, 0.07, 1, 0],
+  bl: [0.05, 0.93, 0, 1], br: [0.95, 0.93, 1, 1],
+};
+
 function ignite(pxCss, pyCss, strength, u, v) {
   if (!gCols) return;
   const cx = (pxCss * fxDpr / CELL) | 0, cy = (pyCss * fxDpr / CELL) | 0;
@@ -1157,6 +1164,15 @@ function animate() {
   // поджиг ячеек под пальцами (цвет — смесь углов по позиции)
   if (pointers.size && buffer) {
     pointers.forEach(p => ignite(p.px, p.py, 0.85 + level * 0.4, p.x, p.y));
+  } else if (buffer) {
+    // залоченный угол: палец убран, а морф уведён к углу — тлеет и дышит
+    const cs = cornerStrengths();
+    const puls = 0.8 + 0.2 * Math.sin(performance.now() / 430);
+    for (const k in CORNER_POS) {
+      if (cs[k] < 0.05) continue;
+      const [px, py, u, v] = CORNER_POS[k];
+      ignite(px * innerWidth, py * innerHeight, (0.5 + 0.5 * cs[k]) * puls, u, v);
+    }
   }
   fxc.clearRect(0, 0, fxW, fxH);
   if (dotsLayer) fxc.drawImage(dotsLayer, 0, 0);
