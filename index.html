@@ -34,8 +34,14 @@
     --dim: rgba(255,255,255,0.45);
     --ring: rgba(255,255,255,0.22);
     --chip: rgba(0,0,0,0.4);
+    --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+    --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+
+  @keyframes recDotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  @keyframes startRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes tapPulse { 0%, 100% { opacity: 0.38; } 50% { opacity: 0.72; } }
   html, body {
     margin: 0; height: 100%; background: #000; color: var(--txt);
     font-family: "DM Mono", Menlo, ui-monospace, monospace;
@@ -109,13 +115,17 @@
     font-size: 12px; font-weight: 600; padding: 10px 16px; border-radius: 100px;
     max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    transition: transform 120ms ease-out;
   }
+  #sampleChip:active { transform: scale(0.96); }
   .roundbtn {
     width: 44px; height: 44px; border-radius: 50%; border: none;
     background: var(--chip); color: var(--txt); font-size: 16px;
     display: flex; align-items: center; justify-content: center;
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    transition: transform 120ms ease-out;
   }
+  .roundbtn:active { transform: scale(0.9); }
   #topbar .right { display: flex; gap: 10px; }
   #recBtn::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: #ff3b30; display: block; }
 
@@ -124,32 +134,46 @@
     position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 40px);
     display: flex; gap: 40px; align-items: flex-end; justify-content: center; z-index: 5;
   }
-  .knob { position: relative; width: 38px; height: 38px; transition: width 0.25s, height 0.25s; touch-action: none; }
+  .knob {
+    position: relative; width: 38px; height: 38px; touch-action: none;
+    transition: width 220ms var(--ease-out-cubic), height 220ms var(--ease-out-cubic);
+    will-change: width, height;
+  }
   .knob svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   .knob .track { fill: none; stroke: var(--ring); stroke-width: 2; }
-  .knob .arc { fill: none; stroke: var(--yellow); stroke-width: 3; stroke-linecap: round; transition: stroke-width 0.25s; }
+  .knob .arc {
+    fill: none; stroke: var(--yellow); stroke-width: 3; stroke-linecap: round;
+    transition: stroke-width 220ms var(--ease-out-cubic);
+  }
   .knob .letter {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 700; transition: font-size 0.25s; pointer-events: none;
+    font-size: 13px; font-weight: 700; transition: font-size 220ms var(--ease-out-cubic); pointer-events: none;
   }
   .knob.big { width: 87px; height: 87px; }
   .knob.big .arc { stroke-width: 6; }
   .knob.big .letter { font-size: 22px; }
+  .knob:active { transform: scale(0.94); }
+  .knob.big:active { transform: none; }
   .knob .tip {
     position: absolute; bottom: calc(100% + 12px); left: 0;
     background: rgba(30,30,30,0.9); color: #fff; font-size: 11px; font-weight: 600;
     padding: 5px 9px; border-radius: 6px; white-space: nowrap;
-    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+    opacity: 0; transform: translateY(5px); pointer-events: none;
+    transition: opacity 180ms ease-out, transform 180ms var(--ease-out-cubic);
   }
-  .knob.big .tip { opacity: 1; }
+  .knob.big .tip { opacity: 1; transform: none; }
   #closeKnob {
     position: fixed; top: calc(env(safe-area-inset-top) + 12px); right: 16px; z-index: 6;
     width: 56px; height: 56px; border-radius: 50%; border: none;
     background: var(--chip); color: #fff; font-size: 20px;
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    display: none; align-items: center; justify-content: center;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transform: scale(0.8); pointer-events: none;
+    transition: opacity 200ms ease-out, transform 200ms var(--ease-out-cubic);
   }
-  body.adjusting #closeKnob { display: flex; }
+  body.adjusting #closeKnob { opacity: 1; transform: none; pointer-events: auto; }
+  #closeKnob:active { transform: scale(0.9); }
+  #topbar { transition: opacity 220ms ease-out; }
   body.adjusting #topbar { opacity: 0; pointer-events: none; }
 
   /* ---------- overlays ---------- */
@@ -160,14 +184,19 @@
   .overlay.show { display: flex; }
 
   #startFx { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* exit: fade + gentle scale-up to reveal the player underneath */
+  #start { transition: opacity 420ms var(--ease-out-cubic), transform 420ms var(--ease-out-cubic); }
+  #start.leaving { opacity: 0; transform: scale(1.05); pointer-events: none; }
   #start h2 {
     position: relative; z-index: 1; margin: 0;
     font-size: 42px; font-weight: 300; letter-spacing: 1px;
     color: #f2f2f2; text-transform: lowercase;
+    animation: startRise 650ms var(--ease-out-cubic) 80ms both;
   }
   #start p {
     position: absolute; z-index: 1; bottom: 16%;
     color: rgba(255,255,255,0.55); font-size: 14px; margin: 0; letter-spacing: 0.5px;
+    animation: startRise 650ms var(--ease-out-cubic) 300ms both, tapPulse 2.8s ease-in-out 950ms infinite;
   }
 
   /* recording window: sheet sliding up from the bottom */
@@ -177,7 +206,7 @@
     position: absolute; inset: 0; background: #050505;
     border-radius: 28px 28px 0 0;
     transform: translateY(103%);
-    transition: transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: transform 320ms var(--ease-out-cubic);
     display: flex; flex-direction: column; align-items: center;
     padding-top: calc(env(safe-area-inset-top) + 58px);
     box-shadow: 0 -12px 40px rgba(0,0,0,0.6);
@@ -189,13 +218,15 @@
   }
   #recDot {
     width: 6px; height: 6px; border-radius: 50%; background: #ff3b30;
-    animation: blink 1.2s steps(2, start) infinite;
+    animation: recDotPulse 1.4s ease-in-out infinite;
   }
   #recClose {
     position: absolute; top: calc(env(safe-area-inset-top) + 46px); right: 18px;
     width: 44px; height: 44px; background: none; border: none;
     color: #8a8a8a; font-size: 22px; z-index: 1;
+    transition: transform 120ms ease-out;
   }
+  #recClose:active { transform: scale(0.88); }
   #recTimer {
     margin-top: 13vh; font-size: 52px; font-weight: 400; color: #fff;
     letter-spacing: 6px; font-variant-numeric: tabular-nums;
@@ -207,14 +238,25 @@
     width: 132px; height: 42px; border: none; border-radius: 999px;
     background: #3a0d0d; color: #ff9d9d; z-index: 1;
     font-size: 12px; letter-spacing: 3px; font-family: inherit; text-transform: uppercase;
+    transition: transform 120ms ease-out, background-color 150ms ease;
   }
+  #stopBtn:active { transform: scale(0.95); background: #4a1010; }
 
-  /* library */
-  #library { background: rgba(0,0,0,0.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); justify-content: flex-end; }
+  /* library — backdrop fade + sheet slide-up (paired, ease-out) */
+  #library {
+    display: flex; justify-content: flex-end;
+    background: rgba(0,0,0,0.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity 260ms ease-out, visibility 260ms;
+  }
+  #library.show { opacity: 1; visibility: visible; pointer-events: auto; }
   #libSheet {
     width: 100%; max-height: 70vh; overflow-y: auto;
     padding: 20px 20px calc(env(safe-area-inset-bottom) + 24px);
+    transform: translateY(100%);
+    transition: transform 300ms var(--ease-out-cubic);
   }
+  #library.show #libSheet { transform: translateY(0); }
   #libSheet h3 { font-size: 12px; letter-spacing: 3px; color: var(--dim); margin: 0 0 14px; text-transform: uppercase; }
   .librow {
     display: flex; align-items: center; gap: 12px; padding: 14px 4px;
@@ -222,7 +264,15 @@
   }
   .librow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .librow .dur { color: var(--dim); font-size: 12px; }
-  .librow .del, .librow .edit { background: none; border: none; color: var(--dim); font-size: 16px; padding: 4px 8px; }
+  .librow .del, .librow .edit {
+    background: none; border: none; color: var(--dim); font-size: 16px; padding: 4px 8px;
+    transition: transform 120ms ease-out, color 150ms ease;
+  }
+  .librow .del:active, .librow .edit:active { transform: scale(0.85); color: #fff; }
+  .librow .nm { transition: color 150ms ease; }
+  .librow .nm:active { color: var(--yellow); }
+  #loadFileRow { transition: opacity 150ms ease; }
+  #loadFileRow:active { opacity: 0.6; }
   .librow input.nm-edit {
     flex: 1; min-width: 0; background: rgba(255,255,255,0.08);
     border: 1px solid rgba(255,255,255,0.25); border-radius: 6px;
@@ -234,12 +284,23 @@
 
   #toast {
     position: fixed; bottom: calc(env(safe-area-inset-bottom) + 140px); left: 50%;
-    transform: translateX(-50%); z-index: 30;
+    z-index: 30;
     background: rgba(30,30,30,0.92); color: #fff; font-size: 12px;
-    padding: 10px 16px; border-radius: 100px; opacity: 0; transition: opacity 0.3s;
+    padding: 10px 16px; border-radius: 100px;
+    opacity: 0; transform: translateX(-50%) translateY(8px);
+    transition: opacity 260ms ease-out, transform 260ms var(--ease-out-cubic);
     pointer-events: none; white-space: nowrap;
   }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   input[type=file] { display: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 </style>
 </head>
 <body>
@@ -317,11 +378,12 @@ let playing = true, schedulerId = null, nextGrainTime = 0;
 let currentName = "—", currentId = null;
 
 const $ = (id) => document.getElementById(id);
+const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const toastEl = $("toast");
 let toastT = null;
 function toast(msg, ms = 2600) {
-  toastEl.textContent = msg; toastEl.style.opacity = 1;
-  clearTimeout(toastT); toastT = setTimeout(() => toastEl.style.opacity = 0, ms);
+  toastEl.textContent = msg; toastEl.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("show"), ms);
 }
 
 const HANN = (() => {
@@ -1352,7 +1414,8 @@ function startGlow() {
       sctx.fillRect(cell.cx - s / 2, cell.cy - s / 2, s, s);
     }
     sctx.globalAlpha = 1;
-    startRaf = requestAnimationFrame(frame);
+    // honor reduced motion: render one static frame, don't loop
+    if (!reduceMotion) startRaf = requestAnimationFrame(frame);
   };
   frame();
 }
@@ -1360,7 +1423,6 @@ startGlow();
 
 // ================= boot =================
 $("start").addEventListener("click", async () => {
-  cancelAnimationFrame(startRaf);
   initAudio();
   // don't await resume: if the OS stalls on audio activation, still build the UI,
   // the fallback pointerdown handler will bring the sound up
@@ -1368,7 +1430,10 @@ $("start").addEventListener("click", async () => {
   setInterval(gateTick, 25);
   restoreKnobs();
   for (const k of ["G", "P", "D", "S"]) makeKnob(k);
-  $("start").classList.remove("show");
+  // exit: fade + scale-up reveals the player; keep the glow running during the fade
+  const startEl = $("start");
+  startEl.classList.add("leaving");
+  setTimeout(() => { cancelAnimationFrame(startRaf); startEl.classList.remove("show", "leaving"); }, 440);
 
   try { db = await openDB(); } catch (e) { db = null; }
   const last = parseInt(localStorage.getItem("granula-last"), 10);
