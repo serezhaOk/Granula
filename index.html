@@ -768,7 +768,7 @@ function useBuiltin() {
 }
 
 // ================= recording =================
-let mediaRec = null, recChunks = [], recTimerId = null, recStart = 0;
+let recTimerId = null, recStart = 0;
 let isRecording = false, micAnalyser = null, micSrc = null, recCancelled = false;
 let recBusy = false, recStream = null; // re-entrancy guard + stream ref so the mic never "hangs"
 
@@ -859,6 +859,64 @@ function unmuteMaster() {
   master.gain.setTargetAtTime(MASTER_VOL, ctx.currentTime, 0.1);
 }
 
+// ---- raw PCM capture ----
+// We do NOT use MediaRecorder: on iOS it only emits fragmented mp4, which Safari's
+// own decodeAudioData cannot parse (it rejects with an empty error), so every
+// recording came back "unsupported". Capturing samples straight off the mic skips
+// the encode/decode round-trip entirely and can't be broken by the platform decoder.
+let capNode = null, capSink = null, capChunks = [], capLen = 0;
+
+function startCapture(src) {
+  capChunks = []; capLen = 0;
+  capNode = ctx.createScriptProcessor(4096, 1, 1);
+  capNode.onaudioprocess = (e) => {
+    const inp = e.inputBuffer.getChannelData(0);
+    capChunks.push(new Float32Array(inp)); // copy: the input buffer is reused
+    capLen += inp.length;
+  };
+  // a ScriptProcessor only runs while it's pulled by the graph, so route it to the
+  // destination through a silent gain — audible output would feed back into the mic
+  capSink = ctx.createGain();
+  capSink.gain.value = 0;
+  src.connect(capNode);
+  capNode.connect(capSink).connect(ctx.destination);
+}
+
+function stopCapture() {
+  if (capNode) { try { capNode.onaudioprocess = null; capNode.disconnect(); } catch (e) {} capNode = null; }
+  if (capSink) { try { capSink.disconnect(); } catch (e) {} capSink = null; }
+  if (!capLen) { capChunks = []; return null; }
+  const out = ctx.createBuffer(1, capLen, ctx.sampleRate);
+  const d = out.getChannelData(0);
+  let off = 0;
+  for (const c of capChunks) { d.set(c, off); off += c.length; }
+  capChunks = [];
+  return out;
+}
+
+// 16-bit PCM WAV — plain PCM survives IndexedDB and decodes on every browser,
+// unlike the mp4 MediaRecorder used to produce
+function encodeWav(buf) {
+  const ch = buf.numberOfChannels, len = buf.length, sr = buf.sampleRate;
+  const chans = [];
+  for (let c = 0; c < ch; c++) chans.push(buf.getChannelData(c));
+  const dv = new DataView(new ArrayBuffer(44 + len * ch * 2));
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); dv.setUint32(4, 36 + len * ch * 2, true); str(8, "WAVE");
+  str(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true);
+  dv.setUint16(22, ch, true); dv.setUint32(24, sr, true);
+  dv.setUint32(28, sr * ch * 2, true); dv.setUint16(32, ch * 2, true); dv.setUint16(34, 16, true);
+  str(36, "data"); dv.setUint32(40, len * ch * 2, true);
+  let o = 44;
+  for (let i = 0; i < len; i++) {
+    for (let c = 0; c < ch; c++) {
+      const s = Math.max(-1, Math.min(1, chans[c][i]));
+      dv.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2;
+    }
+  }
+  return new Blob([dv.buffer], { type: "audio/wav" });
+}
+
 async function startRec() {
   // guard set BEFORE the first await: a double-tap on REC used to start two recordings,
   // the second stream would clobber the first — the orphaned mic stayed open forever and muted the speaker
@@ -878,7 +936,7 @@ async function startRec() {
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+      audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: true },
     });
   } catch (e) {
     setSession("playback"); unmuteMaster();
@@ -886,61 +944,23 @@ async function startRec() {
     toast("no access to the microphone"); recBusy = false; return;
   }
   recStream = stream;
-  recChunks = [];
-  try { mediaRec = new MediaRecorder(stream); }
-  catch (e) {
+
+  try {
+    micSrc = ctx.createMediaStreamSource(stream);
+    micAnalyser = ctx.createAnalyser();  // feeds the waveform + flame
+    micAnalyser.fftSize = 512;
+    micSrc.connect(micAnalyser);         // analyser is a sink, no feedback
+    startCapture(micSrc);
+  } catch (e) {
     stream.getTracks().forEach(t => t.stop());
-    recStream = null;
+    recStream = null; micSrc = null; micAnalyser = null;
     setSession("playback"); unmuteMaster();
     if (playing) startCloud();
     toast("recording not supported"); recBusy = false; return;
   }
 
-  // the flame reacts to the microphone while recording
-  try {
-    micSrc = ctx.createMediaStreamSource(stream);
-    micAnalyser = ctx.createAnalyser();
-    micAnalyser.fftSize = 512;
-    micSrc.connect(micAnalyser); // NOT connected to destination — would cause feedback
-  } catch (e) { micAnalyser = null; }
-
-  mediaRec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
-  mediaRec.onstop = async () => {
-    isRecording = false;
-    stream.getTracks().forEach(t => t.stop());
-    recStream = null;
-    recBusy = false;
-    if (micSrc) { try { micSrc.disconnect(); } catch (e) {} micSrc = null; }
-    micAnalyser = null;
-    clearInterval(recTimerId);
-    setPalette(samplePal);
-    $("recOverlay").classList.remove("show");
-
-    // restore the loud speaker: playback session + a nudge to the context
-    // (otherwise iOS leaves the quiet earpiece speaker on after recording)
-    setSession("playback");
-    try { await ctx.suspend(); await ctx.resume(); } catch (e) {}
-    unmuteMaster();
-
-    if (recCancelled) { // ✕ — close without saving
-      if (playing && buffer) startCloud();
-      return;
-    }
-
-    const blob = new Blob(recChunks, { type: mediaRec.mimeType || "audio/webm" });
-    const name = randomRecName();
-    const ok = await useBlob(blob, name, null);
-    if (!ok) { if (playing && buffer) startCloud(); return; }
-    try {
-      const id = await dbAdd({ name, blob, duration: buffer.duration, ts: Date.now() });
-      currentId = id; localStorage.setItem("granula-last", id);
-      renderLibrary();
-    } catch (e) {}
-  };
-
   isRecording = true;
   recCancelled = false;
-  mediaRec.start();
   recStart = Date.now();
   setPalette("rec");
   $("recTimer").textContent = "00:00";
@@ -953,7 +973,42 @@ async function startRec() {
     if (s >= MAX_SECONDS) stopRec();
   }, 100);
 }
-function stopRec() { if (mediaRec && mediaRec.state === "recording") mediaRec.stop(); }
+
+async function finishRec() {
+  isRecording = false;
+  const pcm = stopCapture();
+  if (recStream) { try { recStream.getTracks().forEach(t => t.stop()); } catch (e) {} recStream = null; }
+  if (micSrc) { try { micSrc.disconnect(); } catch (e) {} micSrc = null; }
+  micAnalyser = null;
+  clearInterval(recTimerId);
+  setPalette(samplePal);
+  $("recOverlay").classList.remove("show");
+
+  // restore the loud speaker: playback session + a nudge to the context
+  // (otherwise iOS leaves the quiet earpiece speaker on after recording)
+  setSession("playback");
+  try { await ctx.suspend(); await ctx.resume(); } catch (e) {}
+  unmuteMaster();
+  recBusy = false;
+
+  if (recCancelled || !pcm) { // ✕ — close without saving
+    if (playing && buffer) startCloud();
+    return;
+  }
+
+  // the captured buffer is used as-is — nothing to decode
+  buffer = normalizeBuffer(trimToMax(pcm));
+  revBuf = reverseBuffer(buffer);
+  const name = randomRecName();
+  setCurrent(name, null);
+  if (playing) startCloud();
+  try {
+    const id = await dbAdd({ name, blob: encodeWav(buffer), duration: buffer.duration, ts: Date.now() });
+    currentId = id; localStorage.setItem("granula-last", id);
+    renderLibrary();
+  } catch (e) { /* storage full — plays without saving */ }
+}
+function stopRec() { if (isRecording) finishRec(); }
 function cancelRec() { recCancelled = true; stopRec(); }
 
 // ================= knobs UI =================
