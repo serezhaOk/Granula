@@ -258,6 +258,7 @@
   }
   #library.show #libSheet { transform: translateY(0); }
   #libSheet h3 { font-size: 12px; letter-spacing: 3px; color: var(--dim); margin: 0 0 14px; text-transform: uppercase; }
+  #buildTag { float: right; letter-spacing: 1px; color: rgba(255,255,255,0.25); }
   .librow {
     display: flex; align-items: center; gap: 12px; padding: 14px 4px;
     border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 14px;
@@ -347,7 +348,7 @@
 
 <div class="overlay" id="library">
   <div id="libSheet">
-    <h3>Samples</h3>
+    <h3>Samples <span id="buildTag"></span></h3>
     <div id="libList"></div>
     <label class="librow" id="loadFileRow">Load file (mp3 / wav)…
       <input type="file" id="file" accept=".mp3,.wav,audio/mpeg,audio/wav,audio/x-wav,audio/*" />
@@ -378,6 +379,7 @@ let playing = true, schedulerId = null, nextGrainTime = 0;
 let currentName = "—", currentId = null;
 
 const $ = (id) => document.getElementById(id);
+const BUILD = "pcm-1";  // shown in the library header — confirms which build is live
 const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const toastEl = $("toast");
 let toastT = null;
@@ -729,21 +731,77 @@ function setCurrent(name, id) {
   else localStorage.removeItem("granula-last");
 }
 
+// Recordings made before the PCM capture are MediaRecorder mp4, which Safari can no
+// longer decode (iOS 26/27 rejects them with an empty error). A media element still
+// PLAYS them, so re-capture the audio in real time and hand back a usable buffer.
+async function recoverByPlayback(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const el = new Audio();
+    el.src = url; el.preload = "auto";
+    await new Promise((res, rej) => {
+      el.onloadedmetadata = res;
+      el.onerror = () => rej(new Error("media element can't play it either"));
+      setTimeout(() => rej(new Error("timed out loading")), 8000);
+    });
+    const src = ctx.createMediaElementSource(el);
+    const chunks = []; let len = 0;
+    const node = ctx.createScriptProcessor(4096, 1, 1);
+    node.onaudioprocess = (e) => {
+      const inp = e.inputBuffer.getChannelData(0);
+      chunks.push(new Float32Array(inp)); len += inp.length;
+    };
+    const sink = ctx.createGain(); sink.gain.value = 0; // silent: recovery shouldn't be audible
+    src.connect(node); node.connect(sink).connect(ctx.destination);
+    await el.play();
+    await new Promise((res) => { el.onended = res; });
+    node.onaudioprocess = null;
+    try { node.disconnect(); sink.disconnect(); src.disconnect(); } catch (e) {}
+    if (!len) throw new Error("recovery captured only silence");
+    const out = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = out.getChannelData(0);
+    let off = 0;
+    for (const c of chunks) { d.set(c, off); off += c.length; }
+    return out;
+  } finally { URL.revokeObjectURL(url); }
+}
+
 async function useBlob(blob, name, id) {
+  let buf = null;
   try {
     if (!blob || !blob.size) throw new Error("empty recording (0 bytes)");
-    const buf = await decode(await blob.arrayBuffer());
+    buf = await decode(await blob.arrayBuffer());
+  } catch (e) {
+    // decode failed — for legacy mp4 recordings that is expected on iOS now,
+    // so play them back once and re-save as WAV, which decodes forever after
+    if (blob && blob.size && !/wav/i.test(blob.type || "")) {
+      toast("recovering old recording — plays through once…", 4000);
+      try {
+        buf = await recoverByPlayback(blob);
+        if (id != null && db) {
+          const rec = await dbGet(id);
+          if (rec) { rec.blob = encodeWav(buf); await dbPut(rec); }
+        }
+      } catch (e2) {
+        const why = (e2 && (e2.message || e2.name)) || "no reason";
+        toast(`couldn't recover: ${why} · ${Math.round(blob.size / 1024)}KB ${blob.type || "no type"}`, 6000);
+        return false;
+      }
+    } else {
+      const why = (e && (e.message || e.name)) || "decoder gave no reason";
+      const info = blob ? `${Math.round(blob.size / 1024)}KB ${blob.type || "no type"}` : "no blob";
+      toast(`couldn't open: ${why} · ${info}`, 6000);
+      return false;
+    }
+  }
+  try {
     buffer = normalizeBuffer(trimToMax(buf));
     revBuf = reverseBuffer(buffer);
     setCurrent(name, id);
     if (playing) startCloud();
     return true;
   } catch (e) {
-    // Safari's decoder can reject with an empty error — report size/type too,
-    // otherwise the message says nothing about what actually went wrong
-    const why = (e && (e.message || e.name)) || "decoder gave no reason";
-    const info = blob ? `${Math.round(blob.size / 1024)}KB ${blob.type || "no type"}` : "no blob";
-    toast(`couldn't open: ${why} · ${info}`, 6000);
+    toast("couldn't use audio: " + ((e && (e.message || e.name)) || "unknown"), 5000);
     return false;
   }
 }
@@ -1416,7 +1474,7 @@ function startRename(rowEl, r) {
   });
   input.addEventListener("blur", commit, { once: true });
 }
-function showLibrary() { renderLibrary(); $("library").classList.add("show"); }
+function showLibrary() { $("buildTag").textContent = BUILD; renderLibrary(); $("library").classList.add("show"); }
 function hideLibrary() { $("library").classList.remove("show"); }
 $("sampleChip").addEventListener("click", showLibrary);
 $("library").addEventListener("click", (e) => { if (e.target === $("library")) hideLibrary(); });
