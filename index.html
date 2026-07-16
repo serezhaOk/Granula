@@ -1165,10 +1165,11 @@ function releasePointer(e) {
   pointers.delete(e.pointerId);
   if (!pointers.size) {
     morph.touching = false;
-    // latch: freeze the target at the current smoothed position so the sound stops
-    // exactly where it was on release — no inertial glide toward the finger's last edge
-    morph.tx = morph.x;
-    morph.ty = morph.y;
+    // latch at the EXACT last finger position: tx/ty already hold it (set on every
+    // move); snap the smoothed value to it too, so the effect neither glides toward
+    // the edge (smoothed was chasing the finger) nor holds a laggy weaker spot
+    morph.x = morph.tx;
+    morph.y = morph.ty;
   } else morphFromPointers();
 }
 stage.addEventListener("pointerup", releasePointer);
@@ -1219,7 +1220,10 @@ let gInt = new Float32Array(0), gGlyph = new Uint8Array(0), gCol = [];
 let dotsLayer = null;
 
 function initGrid() {
-  CELL = Math.round(24 * fxDpr);
+  // wider than 500px CSS: scale the whole dot field (and the finger cluster with it)
+  // proportionally, capped so it stays sensible on very large screens
+  const wScale = Math.min(2.2, Math.max(1, innerWidth / 500));
+  CELL = Math.round(24 * wScale * fxDpr);
   gCols = Math.ceil(fxW / CELL);
   gRows = Math.ceil(fxH / CELL);
   const n = gCols * gRows;
