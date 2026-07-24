@@ -1,11 +1,12 @@
 // GRANULA service worker — offline app shell
 // index.html: network-first (updates arrive right away), offline — from cache.
 // Everything else: cache-first.
-const CACHE = "granula-v4";
+const CACHE = "granula-v5";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
+  "./cloud.js",
   "./icon-180.png",
   "./icon-192.png",
   "./icon-512.png",
@@ -33,8 +34,8 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   const sameOrigin = new URL(req.url).origin === location.origin;
 
-  // page — network first, cache as offline fallback
-  if (req.mode === "navigate") {
+  // config.js — network first, so freshly added Supabase keys are never served stale
+  if (req.mode === "navigate" || /\/config\.js(\?|$)/.test(req.url)) {
     e.respondWith(
       fetch(req)
         .then((res) => {
@@ -42,7 +43,7 @@ self.addEventListener("fetch", (e) => {
           caches.open(CACHE).then((c) => c.put(req, copy));
           return res;
         })
-        .catch(() => caches.match(req).then((r) => r || caches.match("./index.html")))
+        .catch(() => caches.match(req).then((r) => r || (req.mode === "navigate" ? caches.match("./index.html") : undefined)))
     );
     return;
   }

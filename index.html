@@ -18,6 +18,8 @@
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icon-180.png" />
 <link rel="icon" href="icon-192.png" />
+<script src="config.js"></script>
+<script src="cloud.js"></script>
 <title>GRANULA</title>
 <style>
   @font-face {
@@ -387,6 +389,11 @@ let currentName = "—", currentId = null;
 
 const $ = (id) => document.getElementById(id);
 const BUILD = "pcm-1";  // shown in the library header — confirms which build is live
+// stable cross-device id for each recording (local IndexedDB keeps its own int key)
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
+  : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+      const r = (Math.random() * 16) | 0; return (ch === "x" ? r : (r & 0x3) | 0x8).toString(16);
+    }));
 const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const toastEl = $("toast");
 let toastT = null;
@@ -819,7 +826,7 @@ async function loadFile(file) {
   const ok = await useBlob(blob, file.name, null);
   if (!ok) return;
   try {
-    const id = await dbAdd({ name: file.name, blob, duration: buffer.duration, ts: Date.now() });
+    const id = await dbAdd({ uuid: uuid(), name: file.name, blob, duration: buffer.duration, ts: Date.now() });
     currentId = id; localStorage.setItem("granula-last", id);
   } catch (e) { /* storage full — plays without saving */ }
   hideLibrary(); renderLibrary();
@@ -1068,7 +1075,7 @@ async function finishRec() {
   setCurrent(name, null);
   if (playing) startCloud();
   try {
-    const id = await dbAdd({ name, blob: encodeWav(buffer), duration: buffer.duration, ts: Date.now() });
+    const id = await dbAdd({ uuid: uuid(), name, blob: encodeWav(buffer), duration: buffer.duration, ts: Date.now() });
     currentId = id; localStorage.setItem("granula-last", id);
     renderLibrary();
   } catch (e) { /* storage full — plays without saving */ }
