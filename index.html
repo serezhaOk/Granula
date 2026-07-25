@@ -322,10 +322,10 @@
   <div class="palette" data-pal="rec"><div class="blob bTop"></div><div class="blob bMid"></div><div class="blob bBot"></div></div>
   <div id="touchGlow"></div>
   <canvas id="fx"></canvas>
-  <span class="corner tl">Halo</span>
-  <span class="corner tr">Pulse</span>
-  <span class="corner bl">Tide</span>
-  <span class="corner br">Chaos</span>
+  <span class="corner tl">Reverse</span>
+  <span class="corner tr">Gater</span>
+  <span class="corner bl">Chorus</span>
+  <span class="corner br">Scatter</span>
 </div>
 
 <div id="topbar">
@@ -374,11 +374,12 @@
 // ================= params =================
 const MAX_SECONDS = 30;
 const KNOBS = {
-  G: { label: "Grain size", min: 15, max: 400, value: 90,  fmt: v => Math.round(v) + " ms" },
-  P: { label: "Position",   min: 0,  max: 1,   value: 0.3, fmt: v => Math.round(v * 100) + " %" },
-  D: { label: "Density",    min: 2,  max: 60,  value: 18,  fmt: v => Math.round(v) + " /s" },
-  S: { label: "Spread",     min: 0,  max: 1,   value: 0.45,fmt: v => Math.round(v * 100) + " %" },
+  G: { label: "Grain size", min: 15, max: 1000, value: 90,  fmt: v => (v >= 1000 ? "1.00 s" : Math.round(v) + " ms") },
+  P: { label: "Position",   min: 0,  max: 1,    value: 0.3, fmt: v => Math.round(v * 100) + " %" },
+  D: { label: "Density",    min: 2,  max: 60,   value: 18,  fmt: v => Math.round(v) + " /s" },
+  W: { label: "Dry / Wet",  min: 0,  max: 1,    value: 0.6, fmt: v => Math.round(v * 100) + " % wet" },
 };
+const SPREAD = 0.9; // Spread is fixed at 90% now; the 4th knob is Dry/Wet instead
 
 // morph point (XY pad), 0..1, center = neutral
 const morph = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5, touching: false };
@@ -548,7 +549,8 @@ function cornerStrengths() {
 function scheduleGrain(when) {
   if (!buffer) return;
   const c = cornerStrengths();
-  const S = KNOBS.S.value;
+  const S = SPREAD;              // spread fixed at 90%
+  const W = KNOBS.W.value;       // dry/wet: 0 = clean sample, 1 = full reverb/effects
 
   // Halo (TL): no pitch shift on the whole sound — probabilistic octave
   // sparkles, small grains, reverse grains, lots of shimmer. Harmony, not a shift.
@@ -562,10 +564,12 @@ function scheduleGrain(when) {
   if (Math.random() < c.bl * 0.25) pitch -= 12;
   if (Math.random() < c.br) pitch += HARMONY[(Math.random() * HARMONY.length) | 0];
   pitch += (Math.random() - 0.5) * 0.6 * c.bl; // chorus warmth, not out of tune
-  const reverse = !!revBuf && Math.random() < (0.12 + 0.5 * c.tl + 0.25 * c.bl);
+  // base reverse scales with wet (dry = clean); corner reverse (Reverse/Chorus) stays
+  const reverse = !!revBuf && Math.random() < (0.12 * W + 0.5 * c.tl + 0.25 * c.bl);
   const sprayMs = 20 + 260 * S + 350 * c.br;
   const panAmt = 0.25 + 0.75 * S;
-  const shimmerSend = 0.18 + 0.45 * S + 0.4 * c.tl + 0.3 * c.bl;
+  // all reverb send is scaled by Dry/Wet — at W=0 nothing reaches the reverb bus
+  const shimmerSend = (0.18 + 0.45 * S + 0.4 * c.tl + 0.3 * c.bl) * W;
 
   const dur = sizeMs / 1000;
   const jitter = (Math.random() * 2 - 1) * (sprayMs / 1000);
@@ -578,9 +582,9 @@ function scheduleGrain(when) {
   const peak = Math.min(0.9, 1.4 / Math.sqrt(dens));
 
   spawnVoice(when, startSec, dur, rate, panAmt, peak, shimmerSend, false, reverse);
-  // shimmer voice: +1 octave, mostly into reverb
-  if (Math.random() < 0.4 + 0.5 * c.tl) {
-    spawnVoice(when + 0.01, startSec, dur * 1.4, rate * 2, panAmt, peak * (0.25 + 0.3 * S), 1.0, true, reverse);
+  // shimmer voice: +1 octave, only into reverb — silent when fully dry
+  if (W > 0.01 && Math.random() < 0.4 + 0.5 * c.tl) {
+    spawnVoice(when + 0.01, startSec, dur * 1.4, rate * 2, panAmt, peak * (0.25 + 0.3 * S), W, true, reverse);
   }
 }
 
@@ -1579,7 +1583,7 @@ $("start").addEventListener("click", async () => {
   ctx.resume().catch(() => {});
   setInterval(gateTick, 25);
   restoreKnobs();
-  for (const k of ["G", "P", "D", "S"]) makeKnob(k);
+  for (const k of ["G", "P", "D", "W"]) makeKnob(k);
   // exit: fade + scale-up reveals the player; keep the glow running during the fade
   const startEl = $("start");
   startEl.classList.add("leaving");
