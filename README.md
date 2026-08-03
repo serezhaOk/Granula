@@ -3,7 +3,7 @@
 A granular ambient synthesizer for the phone — record field sounds, granulate them, and play with
 a touch XY morph pad. Installable as a PWA, works offline.
 
-**Live:** https://serezhaok.github.io/Granula/
+**Live:** https://granula.serezhaok.com
 
 ---
 
