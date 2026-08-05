@@ -1,7 +1,7 @@
 // GRANULA service worker — offline app shell
 // index.html: network-first (updates arrive right away), offline — from cache.
 // Everything else: cache-first.
-const CACHE = "granula-v5";
+const CACHE = "granula-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -13,6 +13,9 @@ const ASSETS = [
   "./dmmono-300.woff2",
   "./dmmono-400.woff2",
   "./dmmono-500.woff2",
+  "./samples/guitar.mp3",
+  "./samples/kalimba.mp3",
+  "./samples/tongue-drum.mp3",
 ];
 
 self.addEventListener("install", (e) => {

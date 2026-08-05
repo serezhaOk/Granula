@@ -844,11 +844,32 @@ async function loadFile(file) {
   hideLibrary(); renderLibrary();
 }
 
-function useBuiltin() {
+// built-in presets: Pad is generated, the rest are bundled mono mp3s (cached offline)
+const PRESETS = [
+  { name: "Pad", gen: true },
+  { name: "Guitar", file: "samples/guitar.mp3" },
+  { name: "Kalimba", file: "samples/kalimba.mp3" },
+  { name: "Tongue Drum", file: "samples/tongue-drum.mp3" },
+];
+
+function useBuiltin() {          // Pad — procedural, used as the boot default
   buffer = genPad();
   revBuf = reverseBuffer(buffer);
-  setCurrent("Pad · built-in", null);
+  setCurrent("Pad", null);
   if (playing) startCloud();
+}
+
+async function usePreset(p) {
+  if (p.gen) { useBuiltin(); return true; }
+  try {
+    toast("loading " + p.name + "…", 1500);
+    const res = await fetch(p.file);
+    if (!res.ok) throw new Error("http " + res.status);
+    return await useBlob(await res.blob(), p.name, null); // id null → preset, not saved
+  } catch (e) {
+    toast("couldn't load " + p.name);
+    return false;
+  }
 }
 
 // ================= recording =================
@@ -1437,11 +1458,16 @@ async function renderLibrary() {
   const rows = (await dbAll()) || [];
   rows.sort((a, b) => b.ts - a.ts);
 
-  const builtin = document.createElement("div");
-  builtin.className = "librow" + (currentId === null && currentName.startsWith("Pad") ? " current" : "");
-  builtin.innerHTML = `<span class="nm">Pad · built-in</span><span class="dur">5.0s</span>`;
-  builtin.addEventListener("click", () => { useBuiltin(); hideLibrary(); renderLibrary(); });
-  list.appendChild(builtin);
+  for (const p of PRESETS) {
+    const el = document.createElement("div");
+    el.className = "librow" + (currentId === null && currentName === p.name ? " current" : "");
+    el.innerHTML = `<span class="nm"></span><span class="dur">preset</span>`;
+    el.querySelector(".nm").textContent = p.name;
+    el.addEventListener("click", async () => {
+      if (await usePreset(p)) { hideLibrary(); renderLibrary(); }
+    });
+    list.appendChild(el);
+  }
 
   for (const r of rows) {
     const el = document.createElement("div");
