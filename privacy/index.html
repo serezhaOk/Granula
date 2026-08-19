@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GRANULA — Privacy Policy</title>
+<meta name="robots" content="index, follow">
+<link rel="icon" href="/icon-192.png">
+<style>
+  @font-face {
+    font-family: "DM Mono"; font-weight: 400; font-display: swap;
+    src: url("/dmmono-400.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "DM Mono"; font-weight: 500; font-display: swap;
+    src: url("/dmmono-500.woff2") format("woff2");
+  }
+  :root { color-scheme: dark; }
+  body {
+    margin: 0 auto; padding: 56px 20px 96px; max-width: 42rem;
+    background: #000; color: #e8e6e6;
+    font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .mark {
+    font-family: "DM Mono", ui-monospace, monospace; font-weight: 400;
+    font-size: 0.85rem; letter-spacing: 0.35em; text-transform: lowercase;
+    color: #ffc700; text-decoration: none;
+  }
+  h1 {
+    font-family: "DM Mono", ui-monospace, monospace; font-weight: 500;
+    font-size: 1.9rem; letter-spacing: -0.01em; margin: 28px 0 4px;
+  }
+  h2 {
+    font-family: "DM Mono", ui-monospace, monospace; font-weight: 500;
+    font-size: 1rem; margin: 40px 0 8px; color: #fff;
+  }
+  p, li { color: #c2bfbf; }
+  li { margin: 6px 0; }
+  strong { color: #e8e6e6; }
+  a { color: #ffc700; }
+  .updated { color: #7d7a7a; font-size: 0.9rem; margin: 0 0 36px; }
+  .foot {
+    margin-top: 56px; padding-top: 20px; border-top: 1px solid #1c1c1c;
+    color: #7d7a7a; font-size: 0.9rem;
+  }
+  .foot a { margin-right: 18px; }
+</style>
+</head>
+<body>
+
+<a class="mark" href="/">granula</a>
+
+<h1>Privacy Policy</h1>
+<p class="updated">Last updated 19 August 2026</p>
+
+<p>GRANULA is an instrument. It records sound, granulates it and plays it back.
+This policy says what leaves your device when it does, and what happens to it
+afterwards. It covers the GRANULA iOS app and this web version, which share one
+account and one store.</p>
+
+<h2>What is collected</h2>
+<ul>
+  <li><strong>Your email address</strong>, when you create an account. Signing
+      in with Apple gives us whichever address you chose to share, including a
+      relay address if you hid yours; Google or an email link gives us the
+      address you used.</li>
+  <li><strong>Your recordings and imported audio</strong>, with the name and
+      length of each, once you are signed in. These are the sounds you make or
+      bring in yourself.</li>
+  <li><strong>Your subscription status</strong>: whether an account is free or
+      subscribed, when its subscription runs to, and how many samples a free
+      account has used. Apple tells us that a purchase happened. Apple does not
+      pass on your payment details, and we never see them.</li>
+</ul>
+
+<p>That is the whole list. There is no analytics package, no advertising, no
+third-party trackers, no location, no contacts, no identifiers collected for
+tracking, and no profile built about you.</p>
+
+<h2>The microphone</h2>
+<p>The microphone is opened only to record, and only while a recording is
+running. Nothing is captured in the background, and what it hears is never sent
+anywhere unless you keep the take — at which point it becomes one of your
+samples and is treated as one.</p>
+
+<h2>Where it is kept</h2>
+<ul>
+  <li><strong>On your device.</strong> Every sample is written locally first and
+      the instrument plays from that copy. Recording, granulating and playing
+      never need the network.</li>
+  <li><strong>Supabase</strong> holds the account: your email address, the index
+      of your recordings, and your subscription row. Access is scoped to the
+      account — the database will not return another account's rows.</li>
+  <li><strong>Cloudflare R2</strong> holds the audio itself, in a folder derived
+      from your account identifier. A request can name a recording but never a
+      user, so there is none it can make that reaches somebody else's audio.</li>
+  <li><strong>Apple</strong> takes the payment and tells our server the purchase
+      is real, so a subscription is verified rather than taken on the app's
+      word.</li>
+</ul>
+
+<p>Those providers run in regions that may be outside your own country.</p>
+
+<h2>What it is used for</h2>
+<p>To sign you in, to keep your samples where you left them, to move them
+between your devices, and to know whether the account is subscribed. Nothing is
+sold, rented or shared for advertising, and nothing is used to train anything.</p>
+
+<h2>Deleting things</h2>
+<ul>
+  <li><strong>A sample:</strong> open the sample list, tap ··· beside it and
+      delete. It goes from the device and from the account.</li>
+  <li><strong>The account and everything in it:</strong> write to
+      <a href="mailto:serezhaok@gmail.com?subject=Delete%20my%20account">serezhaok@gmail.com</a>
+      from the address you signed in with. The account, the index and the stored
+      audio are deleted within 30 days, and the mail is answered when it is
+      done.</li>
+</ul>
+
+<p>Signing out leaves samples on the device but hides them: a recording belongs
+to the account that made it, and another account signing in on the same device
+does not see it.</p>
+
+<h2>How long it is kept</h2>
+<p>Samples stay until you delete them or delete the account. Subscription
+records are kept while the subscription is live, and afterwards for as long as
+Apple's own records and tax rules require.</p>
+
+<h2>Children</h2>
+<p>GRANULA is not directed at children under 13, and accounts are not knowingly
+created for them.</p>
+
+<h2>Your rights</h2>
+<p>You may ask for a copy of what is held about you, ask for it to be corrected,
+or ask for it to be deleted, at the address below. If you are in the UK, the EU
+or anywhere with data protection law of its own, those rights are yours under
+it, and you may complain to your local authority.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes the date at the top changes with it, and a material
+change is announced in the app before it takes effect.</p>
+
+<h2>Contact</h2>
+<p>Sergei Diuzhev — <a href="mailto:serezhaok@gmail.com?subject=Privacy">serezhaok@gmail.com</a></p>
+
+<div class="foot">
+  <a href="/">The instrument</a>
+  <a href="/privacy/">Privacy</a>
+  <a href="/terms/">Terms</a>
+</div>
+
+</body>
+</html>
